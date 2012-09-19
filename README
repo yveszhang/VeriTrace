@@ -1,3 +1,5 @@
+Set the VT_HONE to the directory of veritrace.
+
 Please first set the JAVA_HOME and BTRACE_HOME. 
 Notice that if you are under Ubuntu/Debian Environment, please make the 'java' command point the offical JDK's. 
 
