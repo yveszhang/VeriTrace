@@ -150,8 +150,11 @@ if test.outFile != "" :
         verifCommand = "scala Serialize " + logPath + "/" 
     caseNo = 1
     for name in outNames: 
-        print ("Test case #" + str(caseNo))
-        subprocess.call(verifCommand+name, shell=True)
+        # sys.stdout.write("Test case #" + str(caseNo) + ": ") 
+        # sys.stdout.flush()
+        # subprocess.call(verifCommand+name, shell=True)
+        res = subprocess.check_output(verifCommand+name, shell=True)
+        print "Test case #" + str(caseNo) + ": " + res,
         caseNo += 1
     # for name in outNames: 
     #     subprocess.call("rm -f " + testPath
