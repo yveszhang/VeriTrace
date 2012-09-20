@@ -1,3 +1,7 @@
+Need python 2.7 or above.
+Need scala.
+Need official Java distribution.
+
 Set the VT_HONE to the directory of veritrace.
 
 Please first set the JAVA_HOME and BTRACE_HOME. 
