@@ -1,13 +1,59 @@
-import java.io.* ;
-import java.util.Random ;
 import java.util.concurrent.*;
 
+import java.io.* ;
+import java.util.Random ;
+import java.util.List ;
+
+class ArgType {
+    public String argType ;
+    public String toString() {
+	return  "" ;
+    }
+}
+
+class ArgInt extends ArgType {
+    private int value ;
+    ArgInt(int v) {
+	argType = "int" ;
+	value = v ;
+    }
+    public int getValue () {
+	return value ;
+    }
+    public String toString () {
+	return Integer.toString(value) ;
+    }
+}
+
+class ArgBool extends ArgType {
+    private int value ;
+    ArgInt(bool v) {
+	argType = "bool" ;
+	value = v ;
+    }
+    public bool getValue () {
+	return value ;
+    }
+    public String toString () {
+	return Integer.toString(value) ;
+    }
+}
+
 class TraceRecord {
-    final int argument, retValue, methodIndex ;
-    TraceRecord(int x, int y, int idx) {
-	this.argument = x ;
+    final int methodIndex ;
+    final ArgType retValue ;
+    final List<ArgType> arguments ;
+    TraceRecord(List<ArgType> args, int y, int idx) {
+	this.arguments = args ;
 	this.retValue = y ;
 	this.methodIndex = idx ;
+    }
+
+    public String toString() {
+	String str = Integer.toString(this.methodIndex) + " " + retValue.toString() ;
+	for (int i = 0; i < arguments.size(); i++) 
+	    str = str + " " + arguments.get(i).toString() ;
+	return str ;
     }
 }
 
