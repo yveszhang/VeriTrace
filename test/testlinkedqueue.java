@@ -1,61 +1,10 @@
 import java.util.concurrent.*;
 
+// import iscas.lcs.veritrace.vtrace.* ;
 import java.io.* ;
 import java.util.Random ;
 import java.util.List ;
-
-class ArgType {
-    public String argType ;
-    public String toString() {
-	return  "" ;
-    }
-}
-
-class ArgInt extends ArgType {
-    private int value ;
-    ArgInt(int v) {
-	argType = "int" ;
-	value = v ;
-    }
-    public int getValue () {
-	return value ;
-    }
-    public String toString () {
-	return Integer.toString(value) ;
-    }
-}
-
-class ArgBool extends ArgType {
-    private int value ;
-    ArgInt(bool v) {
-	argType = "bool" ;
-	value = v ;
-    }
-    public bool getValue () {
-	return value ;
-    }
-    public String toString () {
-	return Integer.toString(value) ;
-    }
-}
-
-class TraceRecord {
-    final int methodIndex ;
-    final ArgType retValue ;
-    final List<ArgType> arguments ;
-    TraceRecord(List<ArgType> args, int y, int idx) {
-	this.arguments = args ;
-	this.retValue = y ;
-	this.methodIndex = idx ;
-    }
-
-    public String toString() {
-	String str = Integer.toString(this.methodIndex) + " " + retValue.toString() ;
-	for (int i = 0; i < arguments.size(); i++) 
-	    str = str + " " + arguments.get(i).toString() ;
-	return str ;
-    }
-}
+import java.util.LinkedList ;
 
 class TestThread extends Thread {
     private ConcurrentLinkedQueue data ;
@@ -71,21 +20,25 @@ class TestThread extends Thread {
     }
 
     public void run() {
-	int elem = elemBase, len = trace.length ;
+	int len = trace.length ;
 	Random r = new Random() ;
 	Object x ;
 
 	for (int i = 0; i < len; i++) {
+	    LinkedList<ArgType> args = new LinkedList () ;
 	    if (r.nextBoolean()) { // add an element
+		LinkedList<ArgType> l = new LinkedList() ;
+		int elem = elemBase + r.nextInt() ;
 		data.add(elem) ;
-		trace[i] = new TraceRecord(elem, 0, 0) ;
+		args.add(ArgInt(elem)) ;
+		trace[i] = new TraceRecord(args, ArgInt(-1), 0) ;
 		elem++ ;
 	    }
 	    else { // remove an element
 		if ((x = data.poll()) == null) 
-		    trace[i] = new TraceRecord(0, -1, 1) ;
+		    trace[i] = new TraceRecord(args, ArgInt(-1), 1) ;
 		else 
-		    trace[i] = new TraceRecord(0, Integer.parseInt(x.toString()), 1) ;
+		    trace[i] = new TraceRecord(args, ArgInt(Integer.parseInt(x.toString())), 1) ;
 	    }
 	}
 
