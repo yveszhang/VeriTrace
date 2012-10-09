@@ -1,6 +1,12 @@
+// 0: add(int):void; poll():int; 
+
 import java.util.concurrent.*;
 
-// import iscas.lcs.veritrace.vtrace.* ;
+import test.ArgType ;
+import test.ArgInt ;
+import test.ArgBoolean ;
+import test.TraceRecord ;
+
 import java.io.* ;
 import java.util.Random ;
 import java.util.List ;
@@ -10,7 +16,7 @@ class TestThread extends Thread {
     private ConcurrentLinkedQueue data ;
     private int elemBase ;
     private TraceRecord[] trace ;
-    private String filename ;
+    //    private String filename ;
 
     TestThread (String name, ConcurrentLinkedQueue q, int base, TraceRecord[] tr) {
 	super(name) ;
@@ -27,18 +33,17 @@ class TestThread extends Thread {
 	for (int i = 0; i < len; i++) {
 	    LinkedList<ArgType> args = new LinkedList () ;
 	    if (r.nextBoolean()) { // add an element
-		LinkedList<ArgType> l = new LinkedList() ;
-		int elem = elemBase + r.nextInt() ;
+		int elem = elemBase; // + r.nextInt() ;
 		data.add(elem) ;
-		args.add(ArgInt(elem)) ;
-		trace[i] = new TraceRecord(args, ArgInt(-1), 0) ;
+		args.add(new ArgInt(elem)) ;
+		trace[i] = new TraceRecord(args, -1, 0) ;
 		elem++ ;
 	    }
 	    else { // remove an element
 		if ((x = data.poll()) == null) 
-		    trace[i] = new TraceRecord(args, ArgInt(-1), 1) ;
+		    trace[i] = new TraceRecord(args, -1, 1) ;
 		else 
-		    trace[i] = new TraceRecord(args, ArgInt(Integer.parseInt(x.toString())), 1) ;
+		    trace[i] = new TraceRecord(args, Integer.parseInt(x.toString()), 1) ;
 	    }
 	}
 
@@ -48,6 +53,9 @@ class TestThread extends Thread {
 
 class TestingConcurrentLinkedQueue {
     public static void main(String argv[]) {
+	ArgType a = new ArgInt(11) ;
+	System.out.println("a = " + a.toString());
+
 	if (argv.length < 4) {
 	    System.out.println("Usage: java <TestClass> [-<outputFile>] <ThreadNumber> <TraceLength> <ClassName> <MethodName1> ... <MethodNameN>"); 
 	    System.exit(-1) ;
@@ -103,7 +111,7 @@ class TestingConcurrentLinkedQueue {
 	    for (int i=0; i < tdNum; i++) {
 		out.write("Thread " + i + "\n") ;
 		for (int j=0; j < tr[i].length; j++) 
-		out.write("" + tr[i][j].methodIndex + " " + tr[i][j].argument + " " + tr[i][j].retValue + "\n") ;
+		    out.write(tr[i][j].toString() + "\n") ;
 	    }
 	    out.close() ;
 	} catch (Exception e) {

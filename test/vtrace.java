@@ -1,4 +1,4 @@
-package iscas.lcs.veritrace.test ;
+package test ;
 
 import java.util.List ;
 

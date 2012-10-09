@@ -1,6 +1,4 @@
-package iscas.lcs.veritrace.test ;
-
-import iscas.lcs.veritrace.test.ArgType ;
+package test ;
 
 public class ArgInt extends ArgType {
     private int value ;
@@ -8,7 +6,7 @@ public class ArgInt extends ArgType {
 	argType = "int" ;
 	value = v ;
     }
-    public int getValue () {
+    public int toInt () {
 	return value ;
     }
     public String toString () {
