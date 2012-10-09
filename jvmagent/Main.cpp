@@ -236,7 +236,7 @@ void parseOptions(const char* s) throw (AgentException) {
     agent->traces = new vector<TraceEvent>[agent->threadNum]() ;
     agent->methodKeys = new map<jmethodID, int>[agent->threadNum]() ;
     it++ ;
-    agent->traceLength = string_to_int(*it) ;
+    agent->traceLength = 2 * string_to_int(*it)  ;
     it++ ;
     agent->testClass = string(*it) ;
     it++ ;
@@ -268,7 +268,7 @@ void parseOptions(const char* s) throw (AgentException) {
 JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *vm, char *options, void *reserved) {
   // cout << "Agent loading (" << vm << ") ..." << endl ;
 
-  static TraceAgent newAgent(2, 100) ;
+  static TraceAgent newAgent(2, 100) ; // default agent with 2 threads, 100 events (or 50 method call/returns)
   agent = &newAgent ;
 
   try{
@@ -294,22 +294,26 @@ JNIEXPORT void JNICALL Agent_OnUnload(JavaVM *vm) {
     // fs << agent->testClass<< "_" << ts << ".jvmlog" ;
     // logfile.open((fs.str()).c_str()) ;
   if (logfile.is_open()) {
-    int mid = -1 ;
     logfile << "# <MethodIndex> <StartTimestamp> <EndTimestamp>" << endl ;
     logfile << agent->threadNum << " " << (int) agent->traces[0].size() << " " << agent->testClass << endl ;
     for (int i = 0; i < agent->threadNum; i++) {
       logfile << "Thread " << i << endl ;
+      int mid = -1 ;
       for (vector<TraceEvent>::iterator iter = agent->traces[i].begin(); iter != agent->traces[i].end(); iter++) {
 	if (iter->isCall) {
-	  mid = iter->methodIndex ;
-	  logfile << mid  << " " << iter->timeStamp ; 
+	  if (mid < 0) {
+	    mid = iter->methodIndex ;
+	    logfile << mid  << " " << iter->timeStamp ; 
+	  }
 	}
 	else {
-	  if (mid == iter->methodIndex) 
+	  if (mid == iter->methodIndex) {
 	    logfile << " " << iter->timeStamp << endl ;
-	  else 
-	    logfile << " 0" << endl << iter->methodIndex << " 0 " << iter->timeStamp << endl ;
-	  mid = -1 ;
+	    mid = -1 ;
+	  }
+	  // else 
+	  //   logfile << " 0" << endl << iter->methodIndex << " 0 " << iter->timeStamp << endl ;
+	  // mid = -1 ;
 	}
       }
     }

@@ -83,15 +83,13 @@ for name in outNames:
         testArgs = ""
     else :
         agentArgs = "=" + logPath + "/" + name + ","  
-        testArgs = "-" + logPath + "/" + name + " "
+        testLogFile = logPath + "/" + name + ".testlog"
     agentArgs = agentArgs + repr(test.threadNum) + "," + repr(test.traceLength) + "," + test.classname 
-    testArgs = testArgs + repr(test.threadNum) + " " + repr(test.traceLength) + " " + test.classname 
     for m in test.methods:
         agentArgs = agentArgs + "," + m[0]
-        testArgs = testArgs + " " + m[0] 
-    testCommand = "java -agentpath:" + agentPath + agentArgs + " -classpath " + testPath + " " + testProgram
+    testCommand = "java -agentpath:" + agentPath + agentArgs + " " + testProgram + " >> " + testLogFile # " -classpath " + testPath + " " + testProgram
     print testCommand    
-#     subprocess.call(testCommand, shell=True)
+    subprocess.call(testCommand, shell=True)
 
 
 # if test.outFile != "" :
