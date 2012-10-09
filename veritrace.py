@@ -87,7 +87,7 @@ for name in outNames:
     agentArgs = agentArgs + repr(test.threadNum) + "," + repr(test.traceLength) + "," + test.classname 
     for m in test.methods:
         agentArgs = agentArgs + "," + m[0]
-    testCommand = "java -agentpath:" + agentPath + agentArgs + " " + testProgram + " >> " + testLogFile # " -classpath " + testPath + " " + testProgram
+    testCommand = "java -agentpath:" + agentPath + agentArgs + " " + testProgram + " " + testLogFile # " -classpath " + testPath + " " + testProgram
     print testCommand    
     subprocess.call(testCommand, shell=True)
 

@@ -1,4 +1,4 @@
-package iscas.lcs.veritrace.serialization
+package serialize
 
 // import scala.util.Random
 import scala.io.Source

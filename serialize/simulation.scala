@@ -1,4 +1,4 @@
-import iscas.lcs.veritrace.serialization._
+import serialize._
 import scala.util.Random
 import scala.io.Source
 import scala.collection.JavaConverters._
