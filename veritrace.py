@@ -5,45 +5,126 @@ import subprocess
 import os
 from veritest import *
 
+# repeat = 1
+# verbose = False
+# keepSource = False
+command = ""
+testConf = ""
+
+def printUsage() :
+    print "Usage: veritrace.py <command> [-verbose] [-repeat <test number>] [-keep] <test configuration>"
+    print "Command can be: " 
+    print "  - verify:\t generate test and simulation source, compile both, run test, run simulation."
+    print "  - source:\t only generate test and simulation source, no compilation, no testing and simulation."
+    print "  - test:\t compile and run test, but not simulation. Must have previously generated test source file."
+    print "  - simulate:\t compile and run simulation. Must have previously generated simulation source file and test logs."
+
 def parseCommandLine() :
-    usage = "Usage: veritrace.py [-verbose] [-repeat <test number>] <test configuration>" 
-# [-import <import path>] [-thread <thread number>] [-trace <trace length>] [-output <output file>] <class name> <method name 1> ... <method name n>" 
-    if len(sys.argv) < 2 :
-        print usage
-        exit(0)
+    global command, testConf
+    repeat = 1 
+    verbose = False 
+    keepSource = True
+    if len(sys.argv) < 3 :
+        printUsage()
+        exit(-1)
     else: 
         hasTestConf = False 
         hasRepeat = False
-        repeat = 1
-        verb = False
         getRepeat = False
-        for s in sys.argv[1:] :
+        command = sys.argv[1]
+        for s in sys.argv[2:] :
             if s[0] == "-" :
                 if s[1:] == "repeat" :
                     if hasRepeat : 
-                        print usage 
+                        printUsage 
+                        exit (-1)
                     else :
                         getRepeat = True
                 elif s[1:] == "verbose" :
-                    verb = True 
+                    verbose = True 
+                elif s[1:] == "keep" :
+                    keepSource = True
                 else :
-                    print usage 
+                    printUsage 
             elif getRepeat :
                 repeat = int(s) 
                 hasRepeat = True
                 getRepeat = False
             else :
                 if hasTestConf :
-                    print usage 
+                    printUsage() 
+                    exit (-1)
                 else : 
-                    testcase = parseTestConfig(s) 
+                    testConf = s
+                    testcase = parseTestConfig(testConf) 
                     hasTestConf = True
         if hasTestConf :
             testcase.repeat = repeat 
-            testcase.verbose = verb
+            testcase.verbose = verbose
+            testcase.keepsrc = keepSource
             return testcase 
         else : 
-            print usage
+            printUsage
+            exit (-1)
+
+def generateSource(test, testPath, testClassname) :
+    generateTestJavaSource(test, testPath, testClassname)
+    print "Generated testing program in Java: " + testPath + "/" + testProgramName
+    generateSimulateScalaSource(test, testPath, testClassname)
+    print "Generated simulation program in Scala: " + testPath + "/" + simuProgramName
+    return (0)
+
+def compileTestSource(compiler, srcLanguage, testPath, srcPath, programName) : 
+    print "Compiling testing program:"
+    print compiler + " -Xlint:unchecked -d . " + testPath + "/" + programName
+    ret = subprocess.call(compiler + " -Xlint:unchecked -d . " + testPath + "/" + programName, shell=True) 
+    if ret != 0 :
+        return (-1)
+    else : 
+        return (0)
+
+def compileSimulateSource (compiler, srcLanguage, testPath, srcPath, programName) : 
+    print "Compiling simulation program:"
+    print compiler + " " + testPath + "/" + programName + " " + srcPath + "/Simulation.scala " + srcPath + "/*.java"
+    ret = subprocess.call(compiler + " " + testPath + "/" + programName \
+                              + " " + srcPath + "/Simulation.scala " + srcPath + "/*.java" \
+                              , shell=True \
+                          ) 
+    if ret != 0 :
+        return (-1)
+    else : 
+        return (0)
+
+def runTesting (test, testClassname, logPath, logName, limit) :
+    agentArgs = "=" + logPath + "/" + logName + "," + repr(test.threadNum) + "," + repr(test.traceLength) + "," + test.classname 
+    testLogFile = logPath + "/" + logName + ".testlog"
+    for m in test.methods:
+        agentArgs = agentArgs + "," + m[0]
+    testCommand = "java -agentpath:" + agentPath + agentArgs + " " + testClassname + " " + testLogFile 
+    print testCommand    
+    count = 0
+    ret = 1 
+    while ret != 0 and count < limit : 
+        ret = subprocess.check_call(testCommand, shell=True)
+        count = count + 1
+    if ret != 0 : 
+        return (-1)
+    else : 
+        return (0)
+
+def runSimulation (test, logPath, logName) :
+    if test.verbose :
+        verifCommand = "scala Simulate -v " + logPath + "/" + logName
+    else : 
+        verifCommand = "scala Simulate " + logPath + "/" + logName 
+    print (verifCommand) 
+    try : 
+        ret = subprocess.check_call(verifCommand, shell=True)
+        return (0)
+    except subprocess.CalledProcessError :
+        return (1)
+    except : 
+        return (-1)
 
 try : 
     vtHomePath = os.environ['VT_HOME'].rstrip("/ ")
@@ -53,11 +134,19 @@ except KeyError:
 if vtHomePath == "" :
     print "Please set the VT_HOME environment variable!" 
     exit (0) 
+os.chdir(vtHomePath)
+os.putenv("CLASSPATH", vtHomePath)
+
+javaCompiler = "/usr/bin/javac"
+scalaCompiler = "/usr/local/share/scala/bin/fsc"
 
 agentPath = vtHomePath + "/jvmagent/TraceAgent.dylib"
 testPath = vtHomePath + "/test"
-scalaPath = vtHomePath + "/serialize"
+srcPath = vtHomePath + "/src"
 logPath = vtHomePath + "/tracelog"
+
+testLimit = 50
+repeatLimit = 100
 
 try : 
     test = parseCommandLine ()
@@ -65,41 +154,104 @@ except ParseError as err :
     print "Parse error: " + str(err)
     exit(0)
 
-print "Threads: " + str(test.threadNum) 
-print "Trace: " + str(test.traceLength)
-print "Classname: " + test.classname
-print "Classpath: " + test.importpath
-print "Logfile: " + test.outFile
-for m in test.methods :
-    print "Method: " + m[0] + ", " + repr(m[1]) + ", " + m[2]
+# print "Threads: " + str(test.threadNum) 
+# print "Trace: " + str(test.traceLength)
+# print "Classname: " + test.classname
+# print "Classpath: " + test.importpath
+# print "Logfile: " + test.outFile
+# for m in test.methods :
+#     print "Method: " + m[0] + ", " + repr(m[1]) + ", " + m[2]
 
-testProgram = generateTestJavaSource(test)
-subprocess.call("javac -Xlint:unchecked " + testProgram + ".java", shell=True) 
+testClassname = test.classname + "T" + str(test.threadNum) + "L" + str(test.traceLength) 
+mid = 0
+for m in test.methods : 
+    testClassname = testClassname + m[0].capitalize()
 
-outNames = map((lambda x: test.outFile + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
-for name in outNames:
+testProgramName = "Testing" + testClassname + ".java" 
+simuProgramName = "Simulate" + testClassname + ".scala" 
+
+if (command == "verify") or command == "source" :
+    generateSource(test, testPath, testClassname) 
+    print "Source files generated!" 
+
+if command == "verify" or command == "test" :
+    ret = compileTestSource(javaCompiler, "java", testPath, srcPath, testProgramName) 
+    if ret == 0 : 
+        print "Testing file compiled!" 
+    else : 
+        print "Compilation of test failed! exit."
+        exit (-1)
+
+if command == "verify" or command == "simulate" :
+    ret = compileSimulateSource(scalaCompiler, "scala", testPath, srcPath, simuProgramName) 
+    if ret == 0 :
+        print "Simulation file compiled!"
+    else : 
+        print "Compilation of simulateion failed! exit."
+        exit (-1)
+
+if test.repeat == 1 :
     if test.outFile == "" :
-        agentArgs = "=" 
-        testArgs = ""
-    else :
-        agentArgs = "=" + logPath + "/" + name + ","  
-        testLogFile = logPath + "/" + name + ".testlog"
-    agentArgs = agentArgs + repr(test.threadNum) + "," + repr(test.traceLength) + "," + test.classname 
-    for m in test.methods:
-        agentArgs = agentArgs + "," + m[0]
-    testCommand = "java -agentpath:" + agentPath + agentArgs + " " + testProgram + " " + testLogFile # " -classpath " + testPath + " " + testProgram
-    print testCommand    
-    subprocess.call(testCommand, shell=True)
+        logName = testConf + ".temp" 
+    else : 
+        logName = test.outFile + ".temp" 
+    if command == "verify" :
+        vCount = 0 
+        ret = 0
+        while ret == 0 and vCount < repeatLimit : 
+            print "\nTest try #" + str(vCount+1) + ": "
+            retTest = runTesting(test, "Testing"+testClassname, logPath, logName, testLimit) 
+            if retTest != 0 : 
+                print "Could not generate testing logs!"
+                exit (-1) 
+            ret = runSimulation(test, logPath, logName) 
+            vCount = vCount + 1
+        if ret == 0 : 
+            print "Checked the test case for " + str(repeatLimit) + " times and no error found!" 
+            exit (0) 
+        else : 
+            print 
+            exit (-1) 
+    elif command == "test" : 
+        ret = runTesting(test, "Testing"+testClassname, logPath, logName, testLimit) 
+        if ret != 0 : 
+            print "Could not generate testing logs!"
+            exit (-1) 
+        else : 
+            print "Testing logs in " + logPath + ": " + logName + ".jvmlog, " + logName + ".testlog" 
+            exit (0)
+else :
+    if test.outFile == "" : 
+        testLogs = map((lambda x: testConf + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
+    else : 
+        testLogs = map((lambda x: test.outFile + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
+    logNames = [] 
+    for testLog in testLogs:
+        if command == "verify" or command == "test" : 
+            retTest = runTesting(test, "Testing"+testClassname, logPath, testLog, testLimit) 
+            if retTest == 0 : 
+                logNames.append(testLog) 
+            print "Generated test logs: " + str(logNames) 
+    if command == "verify" : 
+        for logName in logNames : 
+            ret = runSimulation (test, logPath, logName) 
+            
+if command == "simulate" : 
+    logCount = 0 
+    logPrefix = test.outFile + "_%d_%d" % (test.threadNum, test.traceLength)
+    logName = logPrefix + "_%05d" % (logCount) 
+    while os.path.isfile (logPath+"/"+logName+".jvmlog") \
+            and os.path.isfile (logPath+"/"+logName+".testlog") :
+        print "\nSimulating test " + logName + ":"
+        ret = runSimulation (test, logPath, logName) 
+        if ret == 0 : 
+            print "-> Test " +logName + " has a linearizable execution."
+        elif ret > 0 : 
+            print "-> Test " +logName + " has no linearizable execution."
+        else : 
+            print "-> Simulation error with " + logName
+        logCount = logCount + 1
+        logName = logPrefix + "_%05d" % (logCount) 
+    exit (0) 
+                
 
-
-# if test.outFile != "" :
-#     os.chdir(scalaPath) 
-#     if test.verbose :
-#         verifCommand = "scala Serialize -v " + logPath + "/" 
-#     else : 
-#         verifCommand = "scala Serialize " + logPath + "/" 
-#     caseNo = 1
-#     for name in outNames: 
-#         res = subprocess.check_output(verifCommand+name, shell=True)
-#         print "Test case #" + str(caseNo) + ": " + res,
-#         caseNo += 1

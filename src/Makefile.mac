@@ -1,0 +1,45 @@
+VT_HOME = /Users/zhang/VeriTrace
+CLASS_PATH = $(VT_HOME)
+VT_CLASS_PATH = $(VT_HOME)/jtrace
+TEST_PATH = $(VT_HOME)/test
+AGENT_PATH = $(VT_HOME)/jvmagent
+
+
+JDK_HOME = /Library/Java/JavaVirtualMachines/jdk1.7.0_06.jdk/Contents/Home
+JAVA_HOME = /System/Library/Frameworks/JavaVM.framework/Versions/Current
+JAVA = $(JAVA_HOME)/Commands/java
+JAVAC = $(JAVA_HOME)/Commands/javac
+
+SCALA_HOME = /usr/local/share/scala
+SCALAC = $(SCALA_HOME)/bin/scalac
+SCALAC_OPT = $(SCALA_HOME)/bin/fsc
+
+JAVA_SRC = ArgType.java ArgInt.java ArgBoolean.java TraceRecord.java 
+SCALA_SRC = Serialize.scala Simulation.scala 
+
+CLASSES = $(JAVA_SRC:.java=.class) $(SCALA_SRC:.scala=.class)
+
+LIBS = 
+
+#######################################################################################
+
+#######################################################################################
+
+.SUFFIXES: .java .scala .class 
+
+all: $(CLASSES)
+
+.java.class: 
+	$(JAVAC) -d $(VT_HOME) $<
+
+.scala.class: 
+	$(SCALAC) -d $(VT_HOME) $<
+
+$(TEST_CLASS): 
+	$(JAVAC) -g $(TEST_DIR)/$(TEST_SRC)
+
+clean: 
+	rm -fr *~ *.class $(VT_CLASS_PATH)/*.class 
+
+cleantest:
+	rm -fr $(TEST_PATH)/*.java $(TEST_PATH)/*.class 

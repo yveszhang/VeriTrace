@@ -1,4 +1,4 @@
-package test ;
+package jtrace ;
 
 public class ArgInt extends ArgType {
     private int value ;
