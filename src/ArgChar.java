@@ -10,7 +10,7 @@ public class ArgChar extends ArgType {
 	return value ;
     }
     public String toString () {
-	return Integer.toString(value) ;
+	return Character.toString(value) ;
     }
 }
 

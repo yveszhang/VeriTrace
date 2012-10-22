@@ -1,0 +1,11 @@
+Log file format: 
+
+JVM agent logs (files with .jvmlog suffix) :
+	- every method call has a line: "<method ID> <method entry timestamp> <method exit timestamp>"
+	- method records are grouped by thread, and in each thread they are sorted in temporal order
+
+Java test program logs (files with .testlog suffix) :
+	- every method call has a line: "<method ID> <method return value> <method argument values>"
+	- method arguments are separated by space
+	- if the method call cause an exception, the line is "E <method ID> <method argument values>"
+	- method records are grouped by thread, and in each thread they are sorted in temporal order

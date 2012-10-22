@@ -1,7 +1,8 @@
 from sets import ImmutableSet
 
 admitArgTypes = ImmutableSet(["int", "boolean", "char", "char[]", "String"])
-admitReturnTypes = ImmutableSet(["int", "obj[int]", "boolean", "char", "char[]", "String"])
+admitReturnTypes = ImmutableSet(["int", "obj[int]", "boolean", "char", "char[]", "String", "obj[String]", "StringBuffer"])
+admitParamTypes = ImmutableSet(["Integer", "String"])
 
 class ParseError(Exception) : 
     def __init__(self, line, value) : 
@@ -14,14 +15,15 @@ class ParseError(Exception) :
             return (self.value)
 
 class TestCase :
-    def __init__(self, impath, clsname, param, opt, mthds, thdNum, evtNum, outf, verb, repeat, keep) :
+    def __init__(self, impath, clsname, types, opt, proc, mthds, thdNum, evtNum, outf, verb, repeat, keep) :
         self.importpath = impath
         self.classname = clsname
-        self.parameterized = param
+        self.typeParams = types
         self.methods = mthds # list of triples (methodName, args, return)
         self.threadNum = thdNum 
         self.traceLength = evtNum 
         self.optimisation = opt
+        self.processors = proc
         self.outFile = outf
         self.verbose = verb
         self.repeat = repeat
@@ -39,61 +41,58 @@ class TestCase :
 def parseTestConfig(filename):
     f = open(filename, "r")
     i = 0
-    hasThreadNum, hasLength, hasLogName, hasClassName = False, False, False, False
-    hasImport, hasParameterized, hasOpt = False, False, False
+    hasThreadNum, hasLength, hasLogName = False, False, False
+    hasImport, hasClassName, hasOpt, hasProc = False, False, False, False
     mthds, mthdName, mthdArgs, mthdReturn, hasArgs, hasReturn = [], "", [], "void", False, False
-    impath, optim, parameterized = "", "", False
+    impath, optim, typeParams, proc = "", "", [], 1
     for line in f : 
         i = i+1
         l = line.strip() 
         if (l != "") and (l[0] != "#"): 
-            words = map(lambda x: x.strip(), line.strip().split("="))
+            words = filter(lambda x: x != "", map(lambda x: x.strip(), line.strip().split("=")))
             if words[0] == "thread" :
-                if len(words) < 2: 
-                    raise ParseError(i, "No value for thread") 
-                elif hasThreadNum :
-                    raise ParseError(i, "Already have thread value") 
-                else : 
-                    thdNum = int(words[1])
-                    hasThreadNum = True
+                if len(words) >= 2: 
+                    if hasThreadNum :
+                        raise ParseError(i, "Already have thread value") 
+                    else : 
+                        thdNum = int(words[1])
+                        hasThreadNum = True
 
             elif words[0] == "tracelength" : 
-                if len(words) < 2: 
-                    raise ParseError(i, "No value for tracelength") 
-                elif hasLength :
-                    raise ParseError(i, "Already have tracelength value") 
-                else : 
-                    trLeng = int(words[1])
-                    hasLength = True
+                if len(words) >= 2: 
+                    if hasLength :
+                        raise ParseError(i, "Already have tracelength value") 
+                    else : 
+                        trLeng = int(words[1])
+                        hasLength = True
 
             elif words[0] == "logname" :
-                if len(words) < 2: 
-                    raise ParseError(i, "No value for logname") 
-                elif hasLogName :
-                    raise ParseError(i, "Already have logname value") 
-                else : 
-                    outf = words[1]
-                    hasLogName = True
+                if len(words) >= 2: 
+                    if hasLogName :
+                        raise ParseError(i, "Already have logname value") 
+                    else : 
+                        outf = words[1]
+                        hasLogName = True
 
             elif words[0] == "classname" :
-                if len(words) < 2: 
-                    raise ParseError(i, "No value for classname") 
-                elif hasClassName :
-                    raise ParseError(i, "Already have classname value") 
-                else : 
-                    nameEnd = words[1].find("<")
-                    if nameEnd > 0 :
-                        typeEnd = words[1].find(">")
-                        if typeEnd <= nameEnd: 
-                            raise ParseError(i, "Invalid class name")
-                        clsname = words[1][0:nameEnd]
-                        typname = words[1][nameEnd+1:typeEnd]
-                        if not (typname in admitArgTypes) :
-                            raise ParseError(i, typname + " is not a supported type")
-                        parameterized = True
+                if len(words) >= 2: 
+                    if hasClassName :
+                        raise ParseError(i, "Already have classname value") 
                     else : 
-                        clsname = words[1] 
-                    hasClassName = True
+                        nameEnd = words[1].find("<")
+                        if nameEnd > 0 :
+                            typeEnd = words[1].find(">")
+                            if typeEnd <= nameEnd: 
+                                raise ParseError(i, "Invalid class name")
+                            clsname = words[1][0:nameEnd]
+                            typeParams = filter(lambda x: x != "", \
+                                                    map(lambda x: x.strip(), words[1][nameEnd+1:typeEnd].split(",")))
+                            for t in typeParams : 
+                                if not (t in admitParamTypes) :
+                                    raise ParseError(i, t + " is not a supported type")
+                        else : 
+                            clsname = words[1] 
+                        hasClassName = True
 
             elif words[0] == "import" :
                 if hasImport :
@@ -102,20 +101,21 @@ def parseTestConfig(filename):
                     impath = words[1]
                     hasImport = True
 
-            # elif words[0] == "parameterized" :
-            #     if hasIsInterface :
-            #         raise ParseError(i, "Already have parameterized value") 
-            #     elif (len(words) == 2) and (words[1].lower() == "true") : 
-            #         isInter = True
-
             elif words[0] == "optimisation" :
-                if len(words) < 2: 
-                    raise ParseError(i, "No value for optimisation") 
-                elif hasOpt :
-                    raise ParseError(i, "Already have optimisation value") 
-                else : 
-                    optim = words[1]
-                    hasOpt = True
+                if len(words) >= 2: 
+                    if hasOpt :
+                        raise ParseError(i, "Already have optimisation value") 
+                    else : 
+                        optim = words[1]
+                        hasOpt = True
+
+            elif words[0] == "processors" :
+                if len(words) >= 2: 
+                    if hasProc :
+                        raise ParseError(i, "Already have processors value") 
+                    else : 
+                        proc = int(words[1])
+                        hasProc = True
 
             elif words[0] == "method" :
                 if len(words) < 2: 
@@ -167,7 +167,7 @@ def parseTestConfig(filename):
         raise ParseError(-1, "No value for classname") 
     if mthds == [] :
         raise ParseError(-1, "No method for testing") 
-    return TestCase(impath, clsname, parameterized, optim, mthds, thdNum, trLeng, outf, False, 1, False) # last three arguments: verbose, repeat, keepsrc
+    return TestCase(impath, clsname, typeParams, optim, proc, mthds, thdNum, trLeng, outf, False, 1, False) # last three arguments: verbose, repeat, keepsrc
 
 def generateTestJavaSource(test, testPath, classname): 
     testClassname = "Testing" + classname
@@ -186,7 +186,8 @@ def generateTestJavaSource(test, testPath, classname):
                 firstline = firstline + "," 
         firstline = firstline + "):" + m[2] + "; "
         mid = mid + 1
-    tdRange = 1000 
+    tdRange = 100 
+    strRange = 100000
     mdNum = len(test.methods)
     
     f.write(firstline + "\n" ) ;
@@ -198,6 +199,8 @@ def generateTestJavaSource(test, testPath, classname):
     f.write("import jtrace.ArgType ; \n") 
     f.write("import jtrace.ArgInt ; \n")
     f.write("import jtrace.ArgBoolean ; \n")
+    f.write("import jtrace.ArgChar ; \n")
+    f.write("import jtrace.ArgString ; \n")
     f.write("import jtrace.TraceRecord ; \n")
     # f.write("import jtrace.* ; \n")
     f.write("import java.io.* ;\n")
@@ -205,25 +208,58 @@ def generateTestJavaSource(test, testPath, classname):
     f.write("import java.util.List ;\n")
     f.write("import java.util.LinkedList ;\n\n")
 
+    param = ""
+    if test.typeParams != [] :
+        param = "<"
+        for i in range(0, len(test.typeParams)) : 
+            param = param + test.typeParams[i] 
+            if i+1 < len(test.typeParams) : 
+                param = param + ","
+        param = param + ">"
+    testObjectClass = "VT" + test.classname + "Test" 
+
+    f.write("class " + testObjectClass + " { \n")
+    f.write("  private " + test.classname + param + " data ; \n")
+    f.write("  " + testObjectClass + " () { \n")
+    f.write("    this.data = new " + test.classname + param + "() ; \n")
+    f.write("  } \n")
+    for i in range(len(test.methods)) :
+        m = test.methods[i] 
+        mDef = "vtMethod" + str(i) + "(" 
+        mCall = m[0] + "(" 
+        j = 0 
+        for argtype in m[1] :
+            j = j + 1
+            varname = "x" + str(j) 
+            mDef = mDef + argtype + " " + varname 
+            mCall = mCall + varname 
+            if j < len(m[1]) :
+                mDef = mDef + ", " 
+                mCall = mCall + ", "
+        mDef = mDef + ")"
+        mCall = mCall + ")"
+        if m[2] == "obj[int]" :
+            f.write("    public Integer " + mDef + " { return data." + mCall + "; } \n") 
+        elif m[2] == "obj[String]" : 
+            f.write("    public String " + mDef + " { return data." + mCall + "; } \n") 
+        elif m[2] == "void" :
+            f.write("    public void " + mDef + " { return data." + mCall + "; } \n") 
+        else :
+            f.write("    public " + m[2] + " " + mDef + " { return data." + mCall + " ; } ; \n") 
+    f.write("} \n\n")
+
+
     f.write("class TestThread extends Thread { \n")
-    if test.parameterized :
-        f.write("  private " + test.classname + "<Integer> data ; \n")
-    else :
-        f.write("  private " + test.classname + "<Integer> data ; \n")
+    f.write("  private " + testObjectClass + " data ; \n")
     f.write("  private int elemBase ; \n")
     # f.write("  private static int methodNum = " + str(mdNum) + "; \n")
     f.write("  private TraceRecord[] trace ; \n")
     f.write("\n") 
     
-    if test.parameterized :
-        f.write("  TestThread (String name, " + test.classname + "<Integer> q, TraceRecord[] tr) { \n" )
-    else :
-        f.write("  TestThread (String name, " + test.classname + "<Integer> q, TraceRecord[] tr) { \n" )
+    f.write("  TestThread (String name, " + testObjectClass + " q, TraceRecord[] tr) { \n" )
     f.write("    super(name) ; \n") 
     f.write("    this.data = q ; \n") 
-    f.write("    this.elemBase = Integer.parseInt(name) * " + str(tdRange) + " ;  \n") 
-    # f.write("    this.range = base ; \n") 
-    # f.write("    this.methodNum = mdNum ; \n") 
+    f.write("    this.elemBase = 0 ; \n ") # Integer.parseInt(name) * " + str(tdRange) + " ;  \n") 
     f.write("    this.trace = tr ; \n") 
     f.write("  } \n\n")
     
@@ -236,8 +272,10 @@ def generateTestJavaSource(test, testPath, classname):
             i = i + 1
             f.write("    " + arg + " " + m[0] + "__" + str(i) + "; \n") 
         if m[2] == "obj[int]" :
-            f.write("    Object " + m[0] + "__ret ; \n") 
-        else :
+            f.write("    Integer " + m[0] + "__ret ; \n") 
+        elif m[2] == "obj[String]" : 
+            f.write("    String " + m[0] + "__ret ; \n") 
+        elif m[2] != "void" :
             f.write("    " + m[2] + " " + m[0] + "__ret ; \n") 
     f.write("    for (int i = 0; i < len; i++) { \n") 
     f.write("      LinkedList<ArgType> args = new LinkedList<ArgType> () ; \n") 
@@ -246,7 +284,7 @@ def generateTestJavaSource(test, testPath, classname):
     for i in range(0, mdNum) :
         m = test.methods[i]
         f.write("      case " + str(i) + ": \n") 
-        methodCall = "data." + m[0] + "("
+        methodCall = "data.vtMethod" + str(i) + "("
         j = 0
         for arg in m[1] :
             j = j+1
@@ -254,22 +292,34 @@ def generateTestJavaSource(test, testPath, classname):
                 f.write("        " + m[0] + "__" + str(j) + " = elemBase + r.nextInt(" + str(tdRange) + ") ; \n") 
                 f.write("        args.add(new ArgInt(" + m[0] + "__" + str(j) + ")) ; \n") 
             elif arg == "boolean" :
-                f.write("        boolean " + m[0] + "__" + str(j) + " = r.nextBoolean(); \n")
+                f.write("        " + m[0] + "__" + str(j) + " = r.nextBoolean(); \n")
                 f.write("        args.add(new ArgBoolean(" + m[0] + "__" + str(j) + ")) ; \n") 
+            elif arg == "char" : 
+                f.write("        " + m[0] + "__" + str(j) + " = (char) (65+r.nextInt(26)); \n")
+                f.write("        args.add(new ArgChar(" + m[0] + "__" + str(j) + ")) ; \n") 
+            else : 
+                f.write("        " + m[0] + "__" + str(j) \
+                            + " =  ArgType.encode(r.nextInt(120000)) + ArgType.encode(r.nextInt(120000)); \n")
+                f.write("        args.add(new ArgString(" + m[0] + "__" + str(j) + ")) ; \n") 
             methodCall = methodCall + m[0] + "__" + str(j) 
             if j < len(m[1]) : 
                 methodCall = methodCall + ", " 
         methodCall = methodCall + ")"
+        f.write("        try { \n")
         if m[2] == "void" :
-            f.write("        " + methodCall + " ; \n")
-            f.write("        trace[i] = new TraceRecord(args, -1, mid) ; \n") 
+            f.write("          " + methodCall + " ; \n")
+            f.write("          trace[i] = new TraceRecord(args, -1, mid, false) ; \n") 
         elif m[2] == "obj[int]" :
-            f.write("        " + m[0] + "__ret = " + methodCall + " ; \n")
-            f.write("        if (" + m[0] + "__ret == null) trace[i] = new TraceRecord(args, -1, mid) ; \n")
-            f.write("        else trace[i] = new TraceRecord(args, Integer.parseInt(" + m[0] + "__ret.toString()), mid) ; \n")
+            f.write("          " + m[0] + "__ret = " + methodCall + " ; \n")
+            f.write("          if (" + m[0] + "__ret == null) trace[i] = new TraceRecord(args, -1, mid, false) ; \n")
+            f.write("          else trace[i] = new TraceRecord(args, Integer.parseInt(" + m[0] \
+                        + "__ret.toString()), mid, false ) ; \n")
         else:
-            f.write("        " + m[0] + "__ret = " + methodCall + " ; \n")
-            f.write("        trace[i] = new TraceRecord(args, " + m[0] + "__ret, mid) ; \n") 
+            f.write("          " + m[0] + "__ret = " + methodCall + " ; \n")
+            f.write("          trace[i] = new TraceRecord(args, " + m[0] + "__ret, mid, false ) ; \n") 
+        f.write("        } catch (Exception e) { \n")
+        f.write("          trace[i] = new TraceRecord(args, -1, mid, true) ; \n") 
+        f.write("        } \n")
         f.write("        break ; \n") 
     f.write("      default :  \n") 
     f.write("      } \n") 
@@ -280,10 +330,7 @@ def generateTestJavaSource(test, testPath, classname):
     f.write("class " + testClassname + " { \n") 
     f.write("  public static void main(String argv[]) { \n")
     f.write("    int tdNum = " + str(test.threadNum) + ", mdNum = " + str(mdNum) + ", trLen = " + str(test.traceLength) + "; \n")
-    if test.parameterized :
-        f.write("    " + test.classname + "<Integer> testObj = new " + test.classname + "<Integer>() ; \n") 
-    else :
-        f.write("    " + test.classname + " testObj = new " + test.classname + "() ; \n") 
+    f.write("    " + testObjectClass + " testObj = new " + testObjectClass + "() ; \n") 
     f.write("    TraceRecord[][] tr = new TraceRecord[tdNum][trLen] ; \n")
     f.write("    TestThread[] thd = new TestThread[tdNum] ; \n")
     f.write("    for (int i = 0; i < tdNum; i++) { \n")
@@ -348,14 +395,24 @@ def generateSimulateScalaSource(test, testPath, classname):
     f.write("import jtrace.ArgType ; \n") 
     f.write("import jtrace.ArgInt ; \n")
     f.write("import jtrace.ArgBoolean ; \n")
+    f.write("import jtrace.ArgChar ; \n")
+    f.write("import jtrace.ArgString ; \n")
     f.write("import jtrace.Simulation ; \n")
     # f.write("import jtrace.* ; \n")
     f.write("import java.io.File ;\n")
     f.write("import scala.collection.JavaConverters._; \n\n")
 
     f.write("class " + testClassname + "(logName: String, verbose: Boolean) extends Simulation(logName, verbose) { \n") 
-    if test.parameterized :
-        f.write("  type T = " + test.classname + "[Int] \n")
+    param = ""
+    if test.typeParams != [] :
+        for i in range(0, len(test.typeParams)) : 
+            if test.typeParams[i] == "Integer" :
+                param = param + "java.lang.Integer"
+            else : 
+                param = param + test.typeParams[i] 
+            if i+1 < len(test.typeParams) : 
+                param = param + ","
+        f.write("  type T = " + test.classname + "[" + param + "] \n")
     else :
         f.write("  type T = " + test.classname + " \n")
     f.write("  val methodLog : MethodTable = parseLog \n")
@@ -376,16 +433,22 @@ def generateSimulateScalaSource(test, testPath, classname):
     
     f.write("  def parseTestLine (line: String) : List[ArgType]= { \n")
     f.write("    val words = line.split(\' \') \n") 
-    f.write("    words(0).toInt match { \n") 
+    f.write("    val isExcept = (words(0) == \"E\") \n")
+    f.write("    val methodID = if (isExcept) words(1).toInt else words(0).toInt \n")
+    f.write("    methodID match { \n") 
     for i in range(0, mdNum) :
         m = test.methods[i]
         f.write("      case " + str(i) + " => { \n")
         if m[2] == "void" :
-            f.write("        val mRet = new ArgInt(-1) \n")
+            f.write("        val mRet = if (isExcept) new ArgInt(-1, true) else new ArgInt(\"void\") \n")
         elif m[2] == "int" or m[2] == "obj[int]" : 
-            f.write("        val mRet = new ArgInt(words(1).toInt) \n")
+            f.write("        val mRet = if (isExcept) new ArgInt(-1, true) else new ArgInt(words(1).toInt) \n")
         elif m[2] == "boolean" :                     
-            f.write("        val mRet = if (words(1).toInt == 1) new ArgBoolean(true) else new ArgBoolean(false) \n")
+            f.write("        val mRet = if (isExcept) new ArgInt(-1, true) else if (words(1).toInt == 1) new ArgBoolean(true) else new ArgBoolean(false) \n")
+        elif m[2] == "char" :                     
+            f.write("        val mRet = if (isExcept) new ArgInt(-1, true) else new ArgChar(words(1)(0)) \n")
+        else : 
+            f.write("        val mRet = if (isExcept) new ArgInt(-1, true) else new ArgString(words(1)) \n")
         j = 1
         listConstruct = "        List(mRet" 
         for arg in m[1] :
@@ -393,7 +456,13 @@ def generateSimulateScalaSource(test, testPath, classname):
             if arg == "int" : 
                 f.write("        val arg__" + str(j) + " = new ArgInt(words(" + str(j) + ").toInt) \n")
             elif arg == "boolean" :
-                f.write("        val arg__" + str(j) + " = if (words(" + str(j) + ").toInt == 1) new ArgBoolean(true) else new ArgBoolean(false) \n")
+                f.write("        val arg__" + str(j) \
+                            + " = if (words(" + str(j) \
+                            + ").toInt == 1) new ArgBoolean(true) else new ArgBoolean(false) \n")
+            elif arg == "char" : 
+                f.write("        val arg__" + str(j) + " = new ArgChar(words(" + str(j) + ")(0)) \n")
+            else : 
+                f.write("        val arg__" + str(j) + " = new ArgString(words(" + str(j) + ")) \n")
             listConstruct = listConstruct + ", arg__" + str(j)
         f.write(listConstruct + ") \n") 
         f.write("      } \n")
@@ -420,24 +489,39 @@ def generateSimulateScalaSource(test, testPath, classname):
                 f.write("          val arg__" + str(j) + "= mEvent.arguments(" + str(j) + ").toInt \n")
             elif arg == "boolean" :
                 f.write("          val arg__" + str(j) + "= mEvent.arguments(" + str(j) + ").toBoolean \n")
+            elif arg == "char" :
+                f.write("          val arg__" + str(j) + "= mEvent.arguments(" + str(j) + ").toChar \n")
+            else :
+                f.write("          val arg__" + str(j) + "= mEvent.arguments(" + str(j) + ").toString \n")
             methodCall = methodCall + "arg__" + str(j) 
             j = j+1    
             if j < len(m[1]) : 
                 methodCall = methodCall + ", " 
-        methodCall = methodCall + ")" 
-        if m[2] == "obj[int]" : 
-            f.write("          val ret = Option(" + methodCall + ") \n") 
+        methodCall = methodCall + ")"
+        f.write("          try { \n")
+        if m[2] == "obj[int]" or m[2] == "obj[String]" : 
+            f.write("            val ret = Option(" + methodCall + ") \n") 
         else : 
-            f.write("          val ret = " + methodCall + "\n") 
+            f.write("            val ret = " + methodCall + " \n") 
         if m[2] == "int" : 
-            f.write("          if (ret != mEvent.retValue.toInt) { consistent = false } \n")
+            f.write("            if (ret != mEvent.retValue.toInt) { consistent = false } \n")
         elif m[2] == "boolean" : 
-            f.write("          if (ret != mEvent.retValue.toBoolean) { consistent = false } \n")
+            f.write("            if (ret != mEvent.retValue.toBoolean) { consistent = false } \n")
+        elif m[2] == "char" : 
+            f.write("            if (ret != mEvent.retValue.toChar) { consistent = false } \n")
         elif m[2] == "obj[int]" : 
-            f.write("          ret match { \n") 
-            f.write("            case Some(x) => if (x != mEvent.retValue.toInt) { consistent = false }  \n") 
-            f.write("            case None => if (mEvent.retValue.toInt >= 0) { consistent = false }  \n") 
-            f.write("          } \n") 
+            f.write("            ret match { \n") 
+            f.write("              case Some(x) => if (x != mEvent.retValue.toInt) { consistent = false }  \n") 
+            f.write("              case None => if (mEvent.retValue.toInt >= 0) { consistent = false }  \n") 
+            f.write("            } \n") 
+        elif m[2] == "obj[String]" : 
+            f.write("            ret match { \n") 
+            f.write("              case Some(x) => if (x != mEvent.retValue.toString) { consistent = false }  \n") 
+            f.write("              case None => if (mEvent.retValue != \"null\") { consistent = false }  \n") 
+            f.write("            } \n") 
+        f.write("          } catch { \n")
+        f.write("            case ex : java.lang.Exception => if (! mEvent.retValue.isException) { consistent = false } \n") 
+        f.write("          } \n")
         f.write("        } \n")
     f.write("      } \n") 
     f.write("    } \n") 
@@ -451,7 +535,7 @@ def generateSimulateScalaSource(test, testPath, classname):
     f.write("  val (verbose, logName) = if (args(0) == \"-v\") (true, args(1)) else (false, args(0)) \n")
     f.write("  val simu : Simulation = new " + testClassname + "(logName, verbose) \n")
     f.write("  val finalState = simu.execute () \n")
-    f.write("  if (! finalState.isEmpty) exit(0) else exit(1) \n")
+    f.write("  if (! finalState.isEmpty) sys.exit(0) else sys.exit(1) \n")
     f.write("  } \n")
     f.write("} \n") 
 

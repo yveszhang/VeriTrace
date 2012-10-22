@@ -19,6 +19,8 @@
 
 using namespace std;
 
+typedef struct timeval TimeStamp ;
+
 int string_to_int (string s) {
   unsigned int i = 0 ;
   int val = 0; 
@@ -32,22 +34,22 @@ int string_to_int (string s) {
   return val ;
 } ;
 
-inline long getTimeStamp () {
-  struct timeval t ;
+inline long getTimeStamp (struct timeval * init) {
+  TimeStamp t ;
   gettimeofday(&t, NULL) ;
-  return (t.tv_sec % 100 * 1000000 + t.tv_usec) ;
+  return ((t.tv_sec == init->tv_sec) ? (t.tv_usec-init->tv_usec) : ((t.tv_sec-init->tv_sec)*1000000+t.tv_usec-init->tv_usec)) ;
 }
 
 class TraceEvent {
 public: 
   long timeStamp ;
-  int threadIndex ;
+  //  int threadIndex ;
   int methodIndex ;
   bool isCall ;
 
-  TraceEvent (long ts, int tid, int mid, bool b) {
+  TraceEvent (long ts, int mid, bool b) {
     timeStamp = ts ;
-    threadIndex = tid ;
+    // threadIndex = tid ;
     methodIndex = mid ;
     isCall = b ;
   } ;
@@ -65,10 +67,10 @@ private:
 
 class TraceAgent {
 public:
-  int threadNum, traceLength ;
-  string testClass, outputFile ;
-  map<string, int> testMethods ;
-  map<jmethodID, int> *methodKeys ;
+  int threadNum, traceLength, methodNum ;
+  string testClass, outputFile, methodPrefix ;
+  //  map<string, int> testMethods ; // map method names to number 
+  map<jmethodID, int> *methodKeys ; // 
   vector<TraceEvent> *traces ;
   jvmtiEnv * jvmEnv ;
 
@@ -92,22 +94,19 @@ public:
 } ;
 
 static TraceAgent* agent ;
+static TimeStamp init_stamp ; // = malloc(sizeof(struct timeval));
 
 void checkException(jvmtiError error) throw(AgentException) {
   if (error != JVMTI_ERROR_NONE) 
     throw AgentException(error);
 } ;
 
-void printAgentInfo() {
+inline void printAgentInfo() {
   cout << "Agent [" << agent->testClass << "]: " ;
-  cout << agent->threadNum << " thread, " << agent->traceLength << " events, " << "Method names: " ; 
-  for (map<string, int>::const_iterator iter = agent->testMethods.begin(); iter != agent->testMethods.end(); iter++) 
-    cout << iter->first << ", " ;
-  cout << endl ;
+  cout << agent->threadNum << " thread * " << agent->traceLength << " events" << endl ;
 } ;
 
 void handleMethodEntry(jvmtiEnv* env, JNIEnv* jni, jthread thread, jmethodID method) {
-  long ts = getTimeStamp() ;
   jvmtiError err ;
 
   jvmtiThreadInfo thdInfo ;
@@ -119,16 +118,17 @@ void handleMethodEntry(jvmtiEnv* env, JNIEnv* jni, jthread thread, jmethodID met
   if ( it == agent->methodKeys[thID].end() ) { // method not yet recorded 
     char* name_ptr ; 
     err = env->GetMethodName(method, &name_ptr, NULL, NULL) ;
-    if ( agent->testMethods.find(name_ptr) != agent->testMethods.end() ) { // method name matches, checking the class
+    if ( string(name_ptr).compare(0, agent->methodPrefix.size(), agent->methodPrefix) == 0 ) { // method name matches, checking the class
       jclass methodClass ;
       char* class_sig ;
       err = env->GetMethodDeclaringClass(method, &methodClass) ;
       err = env->GetClassSignature(methodClass, &class_sig, NULL) ;
-      string fullClassPath(class_sig) ;
-      int startPos = fullClassPath.rfind('/'), endPos = fullClassPath.rfind(';') ;
-      string classname = fullClassPath.substr(startPos+1, endPos-startPos-1) ;
-      if ( classname == agent->testClass )   // method class matches, is the interesting method 
-	agent->methodKeys[thID][method] = agent->testMethods[name_ptr] ;
+      // cout << name_ptr << ": " << class_sig << endl ;
+      // string fullClassPath(class_sig) ;
+      // int startPos = fullClassPath.rfind('/'), endPos = fullClassPath.rfind(';') ;
+      // string classname = fullClassPath.substr(startPos+1, endPos-startPos-1) ;
+      if ( agent->testClass.compare(class_sig) == 0 )   // method class matches, is the interesting method 
+	agent->methodKeys[thID][method] = string_to_int(&name_ptr[agent->methodPrefix.size()]) ;
       else 
 	agent->methodKeys[thID][method] = -1 ;
       env->Deallocate( (unsigned char *) class_sig) ;
@@ -140,12 +140,13 @@ void handleMethodEntry(jvmtiEnv* env, JNIEnv* jni, jthread thread, jmethodID met
   }
   int mdID = agent->methodKeys[thID][method] ;
   if (mdID >= 0) {
-    agent->traces[thID].push_back( TraceEvent(ts, thID, mdID, true) ) ;
+    long ts = getTimeStamp(&init_stamp) ;
+    agent->traces[thID].push_back( TraceEvent(ts, mdID, true) ) ;
   }
 } ;
 
 void handleMethodExit(jvmtiEnv* env, JNIEnv* jni, jthread thread, jmethodID method, jboolean b, jvalue v) {
-  long ts = getTimeStamp() ;
+  long ts = getTimeStamp(&init_stamp) ;
   jvmtiError err ;
 
   jvmtiThreadInfo thdInfo ;
@@ -154,32 +155,32 @@ void handleMethodExit(jvmtiEnv* env, JNIEnv* jni, jthread thread, jmethodID meth
   int thID = string_to_int(thdInfo.name) ;
   env->Deallocate( (unsigned char *) thdInfo.name) ;
   
-  map<jmethodID,int>::iterator it = agent->methodKeys[thID].find(method) ;
-  if ( it == agent->methodKeys[thID].end() ) { // method not yet recorded 
-    char* name_ptr ; 
-    err = env->GetMethodName(method, &name_ptr, NULL, NULL) ;
-    if ( agent->testMethods.find(name_ptr) != agent->testMethods.end() ) { // method name matches, checking the class
-      jclass methodClass ;
-      char* class_sig ;
-      err = env->GetMethodDeclaringClass(method, &methodClass) ;
-      err = env->GetClassSignature(methodClass, &class_sig, NULL) ;
-      string fullClassPath(class_sig) ;
-      int startPos = fullClassPath.rfind('/'), endPos = fullClassPath.rfind(';') ;
-      string classname = fullClassPath.substr(startPos+1, endPos-startPos-1) ;
-      if ( classname == agent->testClass )   // method class matches, is the interesting method 
-	agent->methodKeys[thID][method] = agent->testMethods[name_ptr] ;
-      else 
-	agent->methodKeys[thID][method] = -1 ;
-      env->Deallocate( (unsigned char *) class_sig) ;
-    }
-    else {
-      agent->methodKeys[thID][method] = -1 ;
-    }
-    env->Deallocate( (unsigned char *) name_ptr) ;
-  }
+  // map<jmethodID,int>::iterator it = agent->methodKeys[thID].find(method) ;
+  // if ( it == agent->methodKeys[thID].end() ) { // method not yet recorded 
+  //   char* name_ptr ; 
+  //   err = env->GetMethodName(method, &name_ptr, NULL, NULL) ;
+  //   if ( agent->testMethods.find(name_ptr) != agent->testMethods.end() ) { // method name matches, checking the class
+  //     jclass methodClass ;
+  //     char* class_sig ;
+  //     err = env->GetMethodDeclaringClass(method, &methodClass) ;
+  //     err = env->GetClassSignature(methodClass, &class_sig, NULL) ;
+  //     string fullClassPath(class_sig) ;
+  //     int startPos = fullClassPath.rfind('/'), endPos = fullClassPath.rfind(';') ;
+  //     string classname = fullClassPath.substr(startPos+1, endPos-startPos-1) ;
+  //     if ( classname == agent->testClass )   // method class matches, is the interesting method 
+  // 	agent->methodKeys[thID][method] = agent->testMethods[name_ptr] ;
+  //     else 
+  // 	agent->methodKeys[thID][method] = -1 ;
+  //     env->Deallocate( (unsigned char *) class_sig) ;
+  //   }
+  //   else {
+  //     agent->methodKeys[thID][method] = -1 ;
+  //   }
+  //   env->Deallocate( (unsigned char *) name_ptr) ;
+  // }
   int mdID = agent->methodKeys[thID][method] ;
   if (mdID >= 0) {
-    agent->traces[thID].push_back( TraceEvent(ts, thID, mdID, false) ) ;
+    agent->traces[thID].push_back( TraceEvent(ts, mdID, false) ) ;
   }
 } ;
 
@@ -213,6 +214,7 @@ void initialize(JavaVM *vm) throw (AgentException) {
   //  CheckException(err);
 
   agent->jvmEnv = jvmti;
+  agent->methodPrefix = "vtMethod" ;
 } ; 
 
 void parseOptions(const char* s) throw (AgentException) {
@@ -226,26 +228,26 @@ void parseOptions(const char* s) throw (AgentException) {
   if (opts.size() >= 2) {
     vector<string>::iterator it = opts.begin() ;
     string::iterator  sit = (*it).begin() ;
-    if (*sit < '0' || *sit > '9') {
-      agent->outputFile = string(*it) ;
-      it++ ;
-    }
-    else 
-      agent->outputFile = "" ;
+    agent->outputFile = string(*it) ;
+    it++ ;
     agent->threadNum = string_to_int(*it) ;
     agent->traces = new vector<TraceEvent>[agent->threadNum]() ;
     agent->methodKeys = new map<jmethodID, int>[agent->threadNum]() ;
     it++ ;
     agent->traceLength = 2 * string_to_int(*it)  ;
     it++ ;
-    agent->testClass = string(*it) ;
+    agent->testClass = string("LVT"+*it+"Test;") ;
     it++ ;
-    int i = 0 ;
-    while (it != opts.end()) {
-      agent->testMethods[*it] = i ;
-      it++ ;
-      i++ ;
-    } ;
+    int mdNum = string_to_int(*it) ;
+    agent->methodNum = mdNum ;
+    // std::stringstream ss ;
+    // for (int i = 0; i < mdNum; i++) {
+    //   ss.str("") ;
+    //   ss.clear() ;
+    //   ss << "vtMethod" << i ;
+    //   agent->testMethods[ss.str()] = i ;
+    //   // cout << ss.str() <<endl ;
+    // }
   } ;
   
 } ;
@@ -279,6 +281,7 @@ JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *vm, char *options, void *reserved) {
     return JNI_ERR;
   }
   printAgentInfo() ;
+  gettimeofday(&init_stamp, NULL) ;
     
   return JNI_OK;
 } ;
@@ -299,17 +302,25 @@ JNIEXPORT void JNICALL Agent_OnUnload(JavaVM *vm) {
     for (int i = 0; i < agent->threadNum; i++) {
       logfile << "Thread " << i << endl ;
       int mid = -1 ;
+      int mCount = 0 ;
       for (vector<TraceEvent>::iterator iter = agent->traces[i].begin(); iter != agent->traces[i].end(); iter++) {
 	if (iter->isCall) {
 	  if (mid < 0) {
 	    mid = iter->methodIndex ;
+	    mCount = 0 ;
 	    logfile << mid  << " " << iter->timeStamp ; 
+	  } else {
+	    if (mid == iter->methodIndex) mCount++ ;
 	  }
 	}
 	else {
 	  if (mid == iter->methodIndex) {
-	    logfile << " " << iter->timeStamp << endl ;
-	    mid = -1 ;
+	    if (mCount == 0) {
+	      logfile << " " << iter->timeStamp << endl ;
+	      mid = -1 ;
+	    } else {
+	      mCount-- ;
+	    }
 	  }
 	  // else 
 	  //   logfile << " 0" << endl << iter->methodIndex << " 0 " << iter->timeStamp << endl ;
@@ -324,7 +335,7 @@ JNIEXPORT void JNICALL Agent_OnUnload(JavaVM *vm) {
     for (int i = 0; i < agent->threadNum; i++) {
       cout << "Thread " << i << endl ;
       for (vector<TraceEvent>::iterator iter = agent->traces[i].begin(); iter != agent->traces[i].end(); iter++) {
-	cout << iter->timeStamp << " " << iter->methodIndex << " " << iter->threadIndex ;
+	cout << iter->timeStamp << " " << iter->methodIndex ; //  << " " << iter->threadIndex ;
 	if (iter->isCall) 
 	  cout << " in" << endl ;
 	else 

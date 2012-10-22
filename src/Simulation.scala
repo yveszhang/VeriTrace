@@ -13,8 +13,9 @@ class MethodExec (tid: Int, mid: Int, mName: String, sts: Int, ets: Int, mArgs: 
     this(tid, mid, mName, sts, ets, mArgs.asScala.toList, mValue)
   override def toString = 
     ( "TH" + tid +" M" + mid + "(" + mName + "): [" 
-     + ("" /: mArgs.map(_.toString())) (_+_+",") 
-     + "], " +  mValue.toString() + ", " + sts + "--" + ets
+     + ("" /: mArgs.map(_.toString())) (_+_+",") + "], " 
+     +  (if (mValue.isException) "Exception" else mValue.toString)
+     + ", " + sts + "--" + ets
    )
   def timeStamp = (sts, ets) 
   def startTime = sts
@@ -63,7 +64,8 @@ abstract class Simulation (logName: String, verbose: Boolean) {
       val base = tid * (len+1) + 3
       for ( li <- 0 until len ) {
 	val testLine = testLines(base+li)
-	val mid = (testLine.split(' '))(0).toInt
+	val testlineWords = testLine.split(' ')
+	val mid = if (testlineWords(0) == "E") testlineWords(1).toInt else testlineWords(0).toInt
 	val jvmLine = jvmLines(base+li).split(' ').map(_.toInt) 
 	if (mid == jvmLine(0)) {
 	  val mRetArgs = parseTestLine (testLine) 

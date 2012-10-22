@@ -3,11 +3,13 @@
 import sys
 import subprocess 
 import os
+from multiprocessing import Pool
 from veritest import *
 
 # repeat = 1
 # verbose = False
 # keepSource = False
+admitCommands = ImmutableSet(["verify", "source", "test", "simulate"])
 command = ""
 testConf = ""
 
@@ -32,6 +34,9 @@ def parseCommandLine() :
         hasRepeat = False
         getRepeat = False
         command = sys.argv[1]
+        if not (command in admitCommands) : 
+            printUsage() 
+            exit(-1)
         for s in sys.argv[2:] :
             if s[0] == "-" :
                 if s[1:] == "repeat" :
@@ -56,7 +61,7 @@ def parseCommandLine() :
                     exit (-1)
                 else : 
                     testConf = s
-                    testcase = parseTestConfig(testConf) 
+                    testcase = parseTestConfig(vtHomePath+"/"+testConf) 
                     hasTestConf = True
         if hasTestConf :
             testcase.repeat = repeat 
@@ -96,16 +101,17 @@ def compileSimulateSource (compiler, srcLanguage, testPath, srcPath, programName
         return (0)
 
 def runTesting (test, testClassname, logPath, logName, limit) :
-    agentArgs = "=" + logPath + "/" + logName + "," + repr(test.threadNum) + "," + repr(test.traceLength) + "," + test.classname 
+    agentArgs = "=" + logPath + "/" + logName + "," + repr(test.threadNum) + "," + repr(test.traceLength) + "," \
+        + test.classname + "," + str(len(test.methods)) 
     testLogFile = logPath + "/" + logName + ".testlog"
-    for m in test.methods:
-        agentArgs = agentArgs + "," + m[0]
+    # for i in range(0, len(test.methods)):
+    #     agentArgs = agentArgs + ",vtMethod" + str(i)
     testCommand = "java -agentpath:" + agentPath + agentArgs + " " + testClassname + " " + testLogFile 
     print testCommand    
     count = 0
     ret = 1 
     while ret != 0 and count < limit : 
-        ret = subprocess.check_call(testCommand, shell=True)
+        ret = subprocess.check_call(testCommand + " > NULL", shell=True)
         count = count + 1
     if ret != 0 : 
         return (-1)
@@ -120,11 +126,11 @@ def runSimulation (test, logPath, logName) :
     print (verifCommand) 
     try : 
         ret = subprocess.check_call(verifCommand, shell=True)
-        return (0)
+        return (0, logName)
     except subprocess.CalledProcessError :
-        return (1)
+        return (1, logName)
     except : 
-        return (-1)
+        return (-1, logName)
 
 try : 
     vtHomePath = os.environ['VT_HOME'].rstrip("/ ")
@@ -204,7 +210,9 @@ if test.repeat == 1 :
             if retTest != 0 : 
                 print "Could not generate testing logs!"
                 exit (-1) 
-            ret = runSimulation(test, logPath, logName) 
+            (ret, _) = runSimulation(test, logPath, logName) 
+            if ret == 0 : 
+                print "OK!"
             vCount = vCount + 1
         if ret == 0 : 
             print "Checked the test case for " + str(repeatLimit) + " times and no error found!" 
@@ -231,27 +239,33 @@ else :
             retTest = runTesting(test, "Testing"+testClassname, logPath, testLog, testLimit) 
             if retTest == 0 : 
                 logNames.append(testLog) 
-            print "Generated test logs: " + str(logNames) 
+            print "Generated test log: " + str(testLog) 
     if command == "verify" : 
+        # pool = multiprocessing.Pool(test.processors)
+        # for (ret, logName) in pool.map(lambda name: runSimulation (test, logPath, name), logNames) :
         for logName in logNames : 
-            ret = runSimulation (test, logPath, logName) 
+            (ret, name) = runSimulation(test, logPath, logName) 
+            if ret == 0 : 
+                print "-> Test " +logName + " has a linearizable execution."
+            elif ret > 0 : 
+                print "-> Test " +logName + " has no linearizable execution."
+            else : 
+                print "-> Simulation error with " + logName
             
 if command == "simulate" : 
-    logCount = 0 
+    logNames = [testConf + ".temp", test.outFile + ".temp" ]
     logPrefix = test.outFile + "_%d_%d" % (test.threadNum, test.traceLength)
-    logName = logPrefix + "_%05d" % (logCount) 
-    while os.path.isfile (logPath+"/"+logName+".jvmlog") \
-            and os.path.isfile (logPath+"/"+logName+".testlog") :
-        print "\nSimulating test " + logName + ":"
-        ret = runSimulation (test, logPath, logName) 
+    for logCount in range(2) : 
+        logNames.append(logPrefix + "_%05d" % (logCount) )
+    logNames = filter(lambda x : os.path.isfile (logPath+"/"+x+".jvmlog") and os.path.isfile (logPath+"/"+x+".testlog"), logNames)
+    for logName in logNames : 
+        (ret, name) = runSimulation(test, logPath, logName) 
         if ret == 0 : 
             print "-> Test " +logName + " has a linearizable execution."
         elif ret > 0 : 
             print "-> Test " +logName + " has no linearizable execution."
         else : 
             print "-> Simulation error with " + logName
-        logCount = logCount + 1
-        logName = logPrefix + "_%05d" % (logCount) 
     exit (0) 
                 
 
