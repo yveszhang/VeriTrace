@@ -255,7 +255,7 @@ else :
 if command == "simulate" : 
     logNames = [testConf + ".temp", test.outFile + ".temp" ]
     logPrefix = test.outFile + "_%d_%d" % (test.threadNum, test.traceLength)
-    for logCount in range(2) : 
+    for logCount in range(repeatLimit) : 
         logNames.append(logPrefix + "_%05d" % (logCount) )
     logNames = filter(lambda x : os.path.isfile (logPath+"/"+x+".jvmlog") and os.path.isfile (logPath+"/"+x+".testlog"), logNames)
     for logName in logNames : 

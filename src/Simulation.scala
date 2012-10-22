@@ -132,6 +132,11 @@ abstract class Simulation (logName: String, verbose: Boolean) {
     lss.length match {
       case 0 => Nil
       case 1 => List(lss(0))
+      case 2 => {
+	val l1 = interleave(List(lss(0).tail, lss(1))).map(x => lss(0).head :: x)
+	val l2 = interleave(List(lss(0), lss(1).tail)).map(x => lss(1).head :: x)
+	l1 ::: l2
+      }
       case _ => {
 	def removeNthHead (n: Int) = { lss.slice(0,n).toList ::: (lss(n).tail :: lss.slice(n+1, lss.length).toList) }
 	val heads = (0 until lss.length).toList.map( i => (lss(i).head, removeNthHead(i))) 
