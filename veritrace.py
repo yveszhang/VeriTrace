@@ -13,6 +13,22 @@ admitCommands = ImmutableSet(["verify", "source", "test", "simulate"])
 command = ""
 testConf = ""
 
+def readConfig(fn) :
+    f = open(fn) 
+    javac, scalac, testLimit, repeatLimit = "", "", 50, 100
+    for line in f : 
+        words = filter(lambda x: x != "", map(lambda x: x.strip(), line.strip().split("=")))
+        if words[0] == "JavaCompiler" :
+            javac = words[1]
+        elif words[0] == "ScalaCompiler" : 
+            scalac = words[1] 
+        elif words[0] == "TestLimit" :
+            testLimit = int(words[1])
+        elif words[0] == "RepeatLimit" :
+            repeatLimit = int(words[1])
+    close(f)
+    return (javac, scalac, testLimit, repeatLimit) 
+
 def printUsage() :
     print "Usage: veritrace.py <command> [-verbose] [-repeat <test number>] [-keep] <test configuration>"
     print "Command can be: " 
@@ -143,16 +159,30 @@ if vtHomePath == "" :
 os.chdir(vtHomePath)
 os.putenv("CLASSPATH", vtHomePath)
 
-javaCompiler = "/usr/bin/javac"
-scalaCompiler = "/usr/local/share/scala/bin/fsc"
-
-agentPath = vtHomePath + "/jvmagent/TraceAgent.dylib"
+vtOS = os.uname()[0]
+if vtOS == "Darwin" :
+    agentPath = vtHomePath + "/jvmagent/TraceAgent.dylib"
+else :
+    agentPath = vtHomePath + "/jvmagent/TraceAgent.so"
 testPath = vtHomePath + "/test"
 srcPath = vtHomePath + "/src"
 logPath = vtHomePath + "/tracelog"
 
-testLimit = 50
-repeatLimit = 100
+try : 
+    javaCompiler, scalaCompiler, testLimit, repeatLimit = readConfig(vtHomePath+"/veritrace.conf")
+except :
+    try :
+        javaCompiler = subprocess.check_output("which javac", shell=True).strip()
+    except :
+        print "No java compiler is found!"
+        exit (-1)
+    try :
+        scalaCompiler = subprocess.check_output("which scalac", shell=True).strip()
+    except : 
+        print "No java compiler is found!"
+        exit (-1)
+    testLimit = 50
+    repeatLimit = 100
 
 try : 
     test = parseCommandLine ()
