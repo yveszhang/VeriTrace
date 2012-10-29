@@ -243,7 +243,7 @@ def generateTestJavaSource(test, testPath, classname):
         elif m[2] == "obj[String]" : 
             f.write("    public String " + mDef + " { return data." + mCall + "; } \n") 
         elif m[2] == "void" :
-            f.write("    public void " + mDef + " { return data." + mCall + "; } \n") 
+            f.write("    public void " + mDef + " { data." + mCall + "; } \n") 
         else :
             f.write("    public " + m[2] + " " + mDef + " { return data." + mCall + " ; } ; \n") 
     f.write("} \n\n")
@@ -420,8 +420,8 @@ def generateSimulateScalaSource(test, testPath, classname):
     f.write("  val initSimuState : SimuState = List( (new T(), Nil) ) \n")
     f.write("\n") 
 
-    f.write("  // optimization code can be supplied here by defining ST and encodeObject \n") 
     if test.optimisation == "" :
+        f.write("  // optimization code can be supplied here by defining ST and encodeObject \n") 
         f.write("  type ST = T \n") 
         f.write("  def encodeObject (o: T) = o \n\n")
     else : 
@@ -473,7 +473,7 @@ def generateSimulateScalaSource(test, testPath, classname):
     f.write("    } \n")
     f.write("  } \n\n")
     
-    f.write("  def sequentialExecute (tr: List[(Int, Int)]) (init: T) = { \n")
+    f.write("  def sequentialExecute (tr: List[(Int, Int)]) (init: T) (verbose: Boolean) = { \n")
     f.write("    var consistent = true  \n")
     f.write("    val obj: T = new T(init) \n")
     f.write("    for ((tid, midx) <- tr; if consistent ) { \n")
@@ -517,8 +517,9 @@ def generateSimulateScalaSource(test, testPath, classname):
         elif m[2] == "obj[String]" : 
             f.write("            ret match { \n") 
             f.write("              case Some(x) => if (x != mEvent.retValue.toString) { consistent = false }  \n") 
-            f.write("              case None => if (mEvent.retValue != \"null\") { consistent = false }  \n") 
+            f.write("              case None => if (mEvent.retValue.toString != \"null\") { consistent = false }  \n") 
             f.write("            } \n") 
+        f.write("            if (verbose) println(\"Execute method {\" + mEvent.toString + \"} gets: \" + ret.toString) \n") 
         f.write("          } catch { \n")
         f.write("            case ex : java.lang.Exception => if (! mEvent.retValue.isException) { consistent = false } \n") 
         f.write("          } \n")

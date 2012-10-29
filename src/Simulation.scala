@@ -46,7 +46,7 @@ abstract class Simulation (logName: String, verbose: Boolean) {
 
   protected def encodeObject(o: T) : ST
   protected def parseTestLine (line: String) : List[ArgType]
-  protected def sequentialExecute (tr: List[(Int, Int)]) (init: T) : Option[T]
+  protected def sequentialExecute (tr: List[(Int, Int)]) (init: T) (verbose: Boolean) : Option[T]
   
   def parseLog () = {
     var tid = 0
@@ -178,7 +178,7 @@ abstract class Simulation (logName: String, verbose: Boolean) {
     var objSet: Set[ST] = Set() 
     for {
       (initObj, initTrace) <- sts 
-      res = sequentialExecute (tr) (initObj) 
+      res = sequentialExecute (tr) (initObj) (false)
       if res != None
       newObj = res.get
       sObj = encodeObject(newObj)
@@ -209,9 +209,15 @@ abstract class Simulation (logName: String, verbose: Boolean) {
 	  println("********************************************************************************") 
 	  println("Executing interleaving of the following trace:") 
 	  for ((tid, mid) <- segs.head) println(methodLog(tid)(mid).toString)
+	  //	  println("(interleaves: " + interleaves.toString + ")")
 	  println("")
 	  println("with possible states:") 
-	  for ((obj, _) <- st) println("  " + obj.toString + ", ") 
+	  for ((obj, _) <- st) { 
+	    println("----------------------------------------")
+	    println("  " + obj.toString + ": ") 
+	    for (tr <- interleaves) 
+	      println ((sequentialExecute (tr) (obj) (true)).toString)
+	  }
 	  println("********************************************************************************") 
 	  println("This indicates a bug in the original program under testing.")
 	  println("run \"scala Simulate -v <logname>\" to check the full execution trace.")

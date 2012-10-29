@@ -1,0 +1,2 @@
+type ST = String
+def encodeObject(o:T) = o.toString
