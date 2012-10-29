@@ -1,6 +1,6 @@
 Requirement:
-* python 2.7 or above
-* scala
+* python 2.7
+* scala 2.9+
 * official Java distribution
 
 Set the VT_HONE to the directory of veritrace.
