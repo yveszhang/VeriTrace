@@ -1,0 +1,40 @@
+JDK_HOME = /opt/java/jdk
+JAVA_HOME = /opt/java/jdk
+
+C = g++
+CXX = g++
+OPT = -O2
+DEBUG = -g
+INCDIR = -I.
+LIBDIR = -L.
+CFLAGS = -fno-strict-aliasing -fPIC -fno-omit-frame-pointer -W -Wall -DSC_INCLUDE_FX -m64 -static-libgcc 
+LINKFLAGS = -D_JNI_IMPLEMENTATION_ -fno-omit-frame-pointer -m64 -static-libgcc -shared
+
+JDK_INCL = -I$(JDK_HOME)/include -I$(JDK_HOME)/include/linux
+DYLIB_FLAGS = -dynamiclib -flat_namespace -undefined suppress 
+
+CXXCOMPILE = $(CXX) -c $(CFLAGS) $(INCDIR) $(LIBDIR) $(JDK_INCL)
+CXXLINK = $(CXX) $(LINKFLAGS) $(LIBDIR) 
+LIBS = -lm 
+
+
+EXEC = TraceAgent.so
+HEADS = 
+IMPLS = $(HEADS:.h=.cpp) 
+SRCS = Main.cpp $(IMPLS)
+OBJS = $(SRCS:.cpp=.o)
+COMMON = 
+
+all: $(EXEC)
+
+$(EXEC): $(OBJS)
+	$(CXXLINK) -o $(EXEC) $(OBJS) $(LIBS) 
+
+Main.o: Main.cpp $(HEADS) $(COMMON)
+	$(CXXCOMPILE) -o $@ $<
+
+%.o: %.cpp %.h $(COMMON)
+	$(CXXCOMPILE) -o $@ $< 
+
+clean:
+	rm $(EXEC) $(OBJS) *~ 
