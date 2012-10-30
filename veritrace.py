@@ -127,7 +127,7 @@ def runTesting (test, testClassname, logPath, logName, limit) :
     count = 0
     ret = 1 
     while ret != 0 and count < limit : 
-        ret = subprocess.check_call(testCommand + " > NULL", shell=True)
+        ret = subprocess.check_call(testCommand + " > /dev/null", shell=True)
         count = count + 1
     if ret != 0 : 
         return (-1)
