@@ -1,0 +1,45 @@
+VT_HOME = /home/zhangyu/VeriTrace
+CLASS_PATH = $(VT_HOME)
+VT_CLASS_PATH = $(VT_HOME)/jtrace
+TEST_PATH = $(VT_HOME)/test
+AGENT_PATH = $(VT_HOME)/jvmagent
+
+
+JDK_HOME = /opt/java/jdk
+JAVA_HOME = /opt/java/jdk
+JAVA = /usr/bin/java
+JAVAC = /usr/bin/javac
+
+SCALA_HOME = /opt/scala/scala
+SCALAC = $(SCALA_HOME)/bin/scalac
+SCALAC_OPT = $(SCALA_HOME)/bin/fsc
+
+JAVA_SRC = ArgType.java ArgInt.java ArgBoolean.java ArgChar.java ArgString.java TraceRecord.java 
+SCALA_SRC = Simulation.scala 
+
+CLASSES = $(JAVA_SRC:.java=.class) $(SCALA_SRC:.scala=.class)
+
+LIBS = 
+
+#######################################################################################
+
+#######################################################################################
+
+.SUFFIXES: .java .scala .class 
+
+all: $(CLASSES)
+
+.java.class: 
+	$(JAVAC) -d $(VT_HOME) $<
+
+.scala.class: 
+	$(SCALAC) -d $(VT_HOME) $< $(JAVA_SRC)
+
+$(TEST_CLASS): 
+	$(JAVAC) -g $(TEST_DIR)/$(TEST_SRC)
+
+clean: 
+	rm -fr *~ *.class $(VT_CLASS_PATH)/*.class 
+
+cleantest:
+	rm -fr $(TEST_PATH)/*.java $(TEST_PATH)/*.class 
