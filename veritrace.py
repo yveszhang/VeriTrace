@@ -26,7 +26,7 @@ def readConfig(fn) :
             testLimit = int(words[1])
         elif words[0] == "RepeatLimit" :
             repeatLimit = int(words[1])
-    close(f)
+    f.close()
     return (javac, scalac, testLimit, repeatLimit) 
 
 def printUsage() :
@@ -170,7 +170,7 @@ logPath = vtHomePath + "/tracelog"
 
 try : 
     javaCompiler, scalaCompiler, testLimit, repeatLimit = readConfig(vtHomePath+"/veritrace.conf")
-except :
+except IOError as e :
     try :
         javaCompiler = subprocess.check_output("which javac", shell=True).strip()
     except :
