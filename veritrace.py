@@ -278,12 +278,13 @@ else :
         testLogs = map((lambda x: test.outFile + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
     logNames = [] 
     if __name__ == "__main__" :
-        pool = Pool(test.processors)
+        testpool = Pool(test.processors/test.threadNum)
         if command == "verify" or command == "test" : 
-            rets = pool.map(parallelTesting, testLogs)
+            rets = testpool.map(parallelTesting, testLogs)
             logNames = map(lambda x: x[0], filter(lambda x : x[1] == 0, rets))
+        simpool = Pool(test.processors)
         if command == "verify" : 
-            simRets = pool.map(parallelSimulation, logNames)
+            simRets = simpool.map(parallelSimulation, logNames)
             for (ret, name) in simRets : 
                 if ret == 0 : 
                     print "-> Test " +logName + " has a linearizable execution."
@@ -299,8 +300,8 @@ if command == "simulate" :
         logNames.append(logPrefix + "_%05d" % (logCount) )
     logNames = filter(lambda x : os.path.isfile (logPath+"/"+x+".jvmlog") and os.path.isfile (logPath+"/"+x+".testlog"), logNames)
     if __name__ == "__main__" :
-        pool = Pool(test.processors)
-        simRets = pool.map(parallelSimulation, logNames) 
+        simpool = Pool(test.processors)
+        simRets = simpool.map(parallelSimulation, logNames) 
         for (ret, logName) in simRets : 
             if ret > 0 : 
                 print "-> Test " +logName + " has no linearizable execution."
