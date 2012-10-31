@@ -28,8 +28,10 @@ def readConfig(fn) :
                 testLimit = int(words[1])
             elif words[0] == "RepeatLimit" :
                 repeatLimit = int(words[1])
+            elif words[0] == "Processors" :
+                processors = int(words[1])
     f.close()
-    return (javac, scalac, testLimit, repeatLimit) 
+    return (javac, scalac, testLimit, repeatLimit, processors) 
 
 def printUsage() :
     print "Usage: veritrace.py <command> [-verbose] [-repeat <test number>] [-keep] <test configuration>"
@@ -191,7 +193,7 @@ srcPath = vtHomePath + "/src"
 logPath = vtHomePath + "/tracelog"
 
 try : 
-    javaCompiler, scalaCompiler, testLimit, repeatLimit = readConfig(vtHomePath+"/vt.conf")
+    javaCompiler, scalaCompiler, testLimit, repeatLimit, processors = readConfig(vtHomePath+"/vt.conf")
 except IOError as e :
     try :
         javaCompiler = subprocess.check_output("which javac", shell=True).strip()
@@ -278,11 +280,11 @@ else :
         testLogs = map((lambda x: test.outFile + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
     logNames = [] 
     if __name__ == "__main__" :
-        testpool = Pool(test.processors/test.threadNum)
+        testpool = Pool(processors/test.threadNum)
         if command == "verify" or command == "test" : 
             rets = testpool.map(parallelTesting, testLogs)
             logNames = map(lambda x: x[0], filter(lambda x : x[1] == 0, rets))
-        simpool = Pool(test.processors)
+        simpool = Pool(processors)
         if command == "verify" : 
             simRets = simpool.map(parallelSimulation, logNames)
             for (ret, name) in simRets : 
@@ -300,7 +302,7 @@ if command == "simulate" :
         logNames.append(logPrefix + "_%05d" % (logCount) )
     logNames = filter(lambda x : os.path.isfile (logPath+"/"+x+".jvmlog") and os.path.isfile (logPath+"/"+x+".testlog"), logNames)
     if __name__ == "__main__" :
-        simpool = Pool(test.processors)
+        simpool = Pool(processors)
         simRets = simpool.map(parallelSimulation, logNames) 
         for (ret, logName) in simRets : 
             if ret > 0 : 
