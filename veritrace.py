@@ -280,20 +280,26 @@ else :
         testLogs = map((lambda x: test.outFile + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
     logNames = [] 
     if __name__ == "__main__" :
-        testpool = Pool(processors/test.threadNum)
         if command == "verify" or command == "test" : 
-            rets = testpool.map(parallelTesting, testLogs)
+            if processors/test.threadNum > 1 :
+                testpool = Pool(processors/test.threadNum)
+                rets = testpool.map(parallelTesting, testLogs)
+            else : 
+                rets = map(parallelTesting, testLogs) 
             logNames = map(lambda x: x[0], filter(lambda x : x[1] == 0, rets))
-        simpool = Pool(processors)
         if command == "verify" : 
-            simRets = simpool.map(parallelSimulation, logNames)
+            if processors > 1 :
+                simpool = Pool(processors)
+                simRets = simpool.map(parallelSimulation, logNames)
+            else :
+                simRets = map(parallelSimulation, logNames) 
             for (ret, name) in simRets : 
-                if ret == 0 : 
-                    print "-> Test " +logName + " has a linearizable execution."
-                elif ret > 0 : 
-                    print "-> Test " +logName + " has no linearizable execution."
-                else : 
-                    print "-> Simulation error with " + logName
+                 if ret == 0 : 
+                     print "-> Test " +logName + " has a linearizable execution."
+                 elif ret > 0 : 
+                     print "-> Test " +logName + " has no linearizable execution."
+                 else : 
+                     print "-> Simulation error with " + logName
             
 if command == "simulate" : 
     logNames = [testConf + ".temp", test.outFile + ".temp" ]
@@ -302,8 +308,11 @@ if command == "simulate" :
         logNames.append(logPrefix + "_%05d" % (logCount) )
     logNames = filter(lambda x : os.path.isfile (logPath+"/"+x+".jvmlog") and os.path.isfile (logPath+"/"+x+".testlog"), logNames)
     if __name__ == "__main__" :
-        simpool = Pool(processors)
-        simRets = simpool.map(parallelSimulation, logNames) 
+        if processors > 1 :
+            simpool = Pool(processors)
+            simRets = simpool.map(parallelSimulation, logNames) 
+        else : 
+            simRets = map(parallelSimulation, logNames) 
         for (ret, logName) in simRets : 
             if ret > 0 : 
                 print "-> Test " +logName + " has no linearizable execution."

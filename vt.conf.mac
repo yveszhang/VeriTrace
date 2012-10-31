@@ -1,5 +1,5 @@
 JavaCompiler = /usr/bin/javac
 ScalaCompiler = /usr/local/share/scala/bin/fsc
-Processors = 4
+Processors = 1
 
 RepeatLimit = 500

@@ -14,7 +14,7 @@ SCALA_HOME = /usr/local/share/scala
 SCALAC = $(SCALA_HOME)/bin/scalac
 SCALAC_OPT = $(SCALA_HOME)/bin/fsc
 
-JAVA_SRC = ArgType.java ArgInt.java ArgBoolean.java ArgChar.java ArgString.java TraceRecord.java 
+JAVA_SRC = ArgType.java ArgInt.java ArgBoolean.java ArgChar.java ArgString.java TraceRecord.java \
 SCALA_SRC = Simulation.scala 
 
 CLASSES = $(JAVA_SRC:.java=.class) $(SCALA_SRC:.scala=.class)
