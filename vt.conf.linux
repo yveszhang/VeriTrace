@@ -1,0 +1,5 @@
+JavaCompiler = /usr/bin/javac
+ScalaCompiler = /usr/bin/fsc
+Processors = 64
+
+RepeatLimit = 2000
