@@ -4,4 +4,5 @@ Requirement:
 * official Java distribution
 
 Set the VT_HONE to the directory of veritrace.
+Set CLASSPATH to VT_HOME.
 

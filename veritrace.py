@@ -4,7 +4,7 @@ import sys
 import subprocess 
 import os
 from multiprocessing import Pool
-from veritest import *
+from vttest import *
 
 # repeat = 1
 # verbose = False
@@ -17,15 +17,17 @@ def readConfig(fn) :
     f = open(fn) 
     javac, scalac, testLimit, repeatLimit = "", "", 50, 100
     for line in f : 
-        words = filter(lambda x: x != "", map(lambda x: x.strip(), line.strip().split("=")))
-        if words[0] == "JavaCompiler" :
-            javac = words[1]
-        elif words[0] == "ScalaCompiler" : 
-            scalac = words[1] 
-        elif words[0] == "TestLimit" :
-            testLimit = int(words[1])
-        elif words[0] == "RepeatLimit" :
-            repeatLimit = int(words[1])
+        line = line.strip() 
+        if line != "" and line[0] != '#' :
+            words = filter(lambda x: x != "", map(lambda x: x.strip(), line.split("=")))
+            if words[0] == "JavaCompiler" :
+                javac = words[1]
+            elif words[0] == "ScalaCompiler" : 
+                scalac = words[1] 
+            elif words[0] == "TestLimit" :
+                testLimit = int(words[1])
+            elif words[0] == "RepeatLimit" :
+                repeatLimit = int(words[1])
     f.close()
     return (javac, scalac, testLimit, repeatLimit) 
 
@@ -127,12 +129,12 @@ def runTesting (test, testClassname, logPath, logName, limit) :
     count = 0
     ret = 1 
     while ret != 0 and count < limit : 
-        ret = subprocess.check_call(testCommand + " > NULL", shell=True)
+        ret = subprocess.check_call(testCommand + " > /dev/null", shell=True)
         count = count + 1
     if ret != 0 : 
         return (-1)
     else : 
-        return (0)
+        return (0) # successful testing run
 
 def runSimulation (test, logPath, logName) :
     if test.verbose :
@@ -147,6 +149,26 @@ def runSimulation (test, logPath, logName) :
         return (1, logName)
     except : 
         return (-1, logName)
+
+def singleVerify (test, testClassname, logPath, logName, testLimit) :
+    vCount = 0 
+    ret = 0
+    while ret == 0 and vCount < repeatLimit : 
+        print "\nTest try #" + str(vCount+1) + ": "
+        retTest = runTesting(test, "Testing"+testClassname, logPath, logName, testLimit) 
+        if retTest != 0 : 
+            print "Could not generate testing logs!"
+            exit (-1) 
+        (ret, _) = runSimulation(test, logPath, logName) 
+        if ret == 0 : 
+            print "OK!"
+        vCount = vCount + 1
+    if ret == 0 : 
+        print "Checked the test case for " + str(repeatLimit) + " times and no error found!" 
+        exit (0) 
+    else : 
+        print 
+        exit (-1) 
 
 try : 
     vtHomePath = os.environ['VT_HOME'].rstrip("/ ")
@@ -169,7 +191,7 @@ srcPath = vtHomePath + "/src"
 logPath = vtHomePath + "/tracelog"
 
 try : 
-    javaCompiler, scalaCompiler, testLimit, repeatLimit = readConfig(vtHomePath+"/veritrace.conf")
+    javaCompiler, scalaCompiler, testLimit, repeatLimit = readConfig(vtHomePath+"/vt.conf")
 except IOError as e :
     try :
         javaCompiler = subprocess.check_output("which javac", shell=True).strip()
@@ -206,6 +228,14 @@ for m in test.methods :
 testProgramName = "Testing" + testClassname + ".java" 
 simuProgramName = "Simulate" + testClassname + ".scala" 
 
+def parallelTesting(log) :
+    ret = runTesting(test, "Testing"+testClassname, logPath, log, testLimit)
+    return (log, ret)
+
+def parallelSimulation(log) :
+    ret = runSimulation(test, logPath, log)
+    return ret
+
 if (command == "verify") or command == "source" :
     generateSource(test, testPath, testClassname) 
     print "Source files generated!" 
@@ -232,24 +262,7 @@ if test.repeat == 1 :
     else : 
         logName = test.outFile + ".temp" 
     if command == "verify" :
-        vCount = 0 
-        ret = 0
-        while ret == 0 and vCount < repeatLimit : 
-            print "\nTest try #" + str(vCount+1) + ": "
-            retTest = runTesting(test, "Testing"+testClassname, logPath, logName, testLimit) 
-            if retTest != 0 : 
-                print "Could not generate testing logs!"
-                exit (-1) 
-            (ret, _) = runSimulation(test, logPath, logName) 
-            if ret == 0 : 
-                print "OK!"
-            vCount = vCount + 1
-        if ret == 0 : 
-            print "Checked the test case for " + str(repeatLimit) + " times and no error found!" 
-            exit (0) 
-        else : 
-            print 
-            exit (-1) 
+        singleVerify (test, testClassname, logPath, logName, testLimit) 
     elif command == "test" : 
         ret = runTesting(test, "Testing"+testClassname, logPath, logName, testLimit) 
         if ret != 0 : 
@@ -264,23 +277,21 @@ else :
     else : 
         testLogs = map((lambda x: test.outFile + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
     logNames = [] 
-    for testLog in testLogs:
+    if __name__ == "__main__" :
+        testpool = Pool(test.processors/test.threadNum)
         if command == "verify" or command == "test" : 
-            retTest = runTesting(test, "Testing"+testClassname, logPath, testLog, testLimit) 
-            if retTest == 0 : 
-                logNames.append(testLog) 
-            print "Generated test log: " + str(testLog) 
-    if command == "verify" : 
-        # pool = multiprocessing.Pool(test.processors)
-        # for (ret, logName) in pool.map(lambda name: runSimulation (test, logPath, name), logNames) :
-        for logName in logNames : 
-            (ret, name) = runSimulation(test, logPath, logName) 
-            if ret == 0 : 
-                print "-> Test " +logName + " has a linearizable execution."
-            elif ret > 0 : 
-                print "-> Test " +logName + " has no linearizable execution."
-            else : 
-                print "-> Simulation error with " + logName
+            rets = testpool.map(parallelTesting, testLogs)
+            logNames = map(lambda x: x[0], filter(lambda x : x[1] == 0, rets))
+        simpool = Pool(test.processors)
+        if command == "verify" : 
+            simRets = simpool.map(parallelSimulation, logNames)
+            for (ret, name) in simRets : 
+                if ret == 0 : 
+                    print "-> Test " +logName + " has a linearizable execution."
+                elif ret > 0 : 
+                    print "-> Test " +logName + " has no linearizable execution."
+                else : 
+                    print "-> Simulation error with " + logName
             
 if command == "simulate" : 
     logNames = [testConf + ".temp", test.outFile + ".temp" ]
@@ -288,14 +299,14 @@ if command == "simulate" :
     for logCount in range(repeatLimit) : 
         logNames.append(logPrefix + "_%05d" % (logCount) )
     logNames = filter(lambda x : os.path.isfile (logPath+"/"+x+".jvmlog") and os.path.isfile (logPath+"/"+x+".testlog"), logNames)
-    for logName in logNames : 
-        (ret, name) = runSimulation(test, logPath, logName) 
-        if ret == 0 : 
-            print "-> Test " +logName + " has a linearizable execution."
-        elif ret > 0 : 
-            print "-> Test " +logName + " has no linearizable execution."
-        else : 
-            print "-> Simulation error with " + logName
+    if __name__ == "__main__" :
+        simpool = Pool(test.processors)
+        simRets = simpool.map(parallelSimulation, logNames) 
+        for (ret, logName) in simRets : 
+            if ret > 0 : 
+                print "-> Test " +logName + " has no linearizable execution."
+            elif ret < 0: 
+                print "-> Simulation error with " + logName
     exit (0) 
                 
 
