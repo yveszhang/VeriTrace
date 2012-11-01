@@ -283,9 +283,7 @@ else :
             else :
                 simRets = map(parallelSimulation, logNames) 
             for (ret, name) in simRets : 
-                 if ret == 0 : 
-                     print "-> Test " + name + " has a linearizable execution."
-                 elif ret > 0 : 
+                 if ret > 0 : 
                      print "-> Test " + name + " has no linearizable execution."
                  else : 
                      print "-> Simulation error with " + name

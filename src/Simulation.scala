@@ -202,25 +202,23 @@ abstract class Simulation (logName: String, verbose: Boolean) {
       if (newState.isEmpty) {
 	if (verbose ) {
 	  println("There is no consistent sequential execution trace for this execution!") 
-	  println("This indicates a bug in the original program under testing.")
-	}
-	else { 	
-	  println("There is no consistent sequential execution trace for this execution!") 
-	  println("********************************************************************************") 
-	  println("Executing interleaving of the following trace:") 
-	  for ((tid, mid) <- segs.head) println(methodLog(tid)(mid).toString)
-	  //	  println("(interleaves: " + interleaves.toString + ")")
-	  println("")
-	  println("with possible states:") 
+	  println("Executing interleaving of the above trace with possible states:") 
 	  for ((obj, _) <- st) { 
 	    println("----------------------------------------")
 	    println("  " + obj.toString + ": ") 
 	    for (tr <- interleaves) 
 	      println ((sequentialExecute (tr) (obj) (true)).toString)
 	  }
+	  println("\nThis indicates a bug in the original program under testing.")
+	}
+	else { 	
+	  println("There is no consistent sequential execution for the following trace!") 
+	  println("********************************************************************************") 
+	  for ((tid, mid) <- segs.head) println(methodLog(tid)(mid).toString)
 	  println("********************************************************************************") 
 	  println("This indicates a bug in the original program under testing.")
 	  println("run \"scala Simulate -v <logname>\" to check the full execution trace.")
+
 	}
 	newState 
       }
