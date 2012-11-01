@@ -6,9 +6,6 @@ import os
 from multiprocessing import Pool
 from vttest import *
 
-# repeat = 1
-# verbose = False
-# keepSource = False
 admitCommands = ImmutableSet(["verify", "source", "test", "simulate"])
 command = ""
 testConf = ""
@@ -124,8 +121,6 @@ def runTesting (test, testClassname, logPath, logName, limit) :
     agentArgs = "=" + logPath + "/" + logName + "," + repr(test.threadNum) + "," + repr(test.traceLength) + "," \
         + test.classname + "," + str(len(test.methods)) 
     testLogFile = logPath + "/" + logName + ".testlog"
-    # for i in range(0, len(test.methods)):
-    #     agentArgs = agentArgs + ",vtMethod" + str(i)
     testCommand = "java -agentpath:" + agentPath + agentArgs + " " + testClassname + " " + testLogFile 
     print testCommand    
     count = 0
@@ -214,18 +209,12 @@ except ParseError as err :
     print "Parse error: " + str(err)
     exit(0)
 
-# print "Threads: " + str(test.threadNum) 
-# print "Trace: " + str(test.traceLength)
-# print "Classname: " + test.classname
-# print "Classpath: " + test.importpath
-# print "Logfile: " + test.outFile
-# for m in test.methods :
-#     print "Method: " + m[0] + ", " + repr(m[1]) + ", " + m[2]
-
 testClassname = test.classname + "T" + str(test.threadNum) + "L" + str(test.traceLength) 
+methodNames = "" 
 mid = 0
 for m in test.methods : 
     testClassname = testClassname + m[0].capitalize()
+    methodNames = methodNames + "_" + m[0]
 
 testProgramName = "Testing" + testClassname + ".java" 
 simuProgramName = "Simulate" + testClassname + ".scala" 
@@ -262,7 +251,7 @@ if test.repeat == 1 :
     if test.outFile == "" :
         logName = testConf + ".temp" 
     else : 
-        logName = test.outFile + ".temp" 
+        logName = test.outFile + methodNames + ".temp" 
     if command == "verify" :
         singleVerify (test, testClassname, logPath, logName, testLimit) 
     elif command == "test" : 
@@ -277,7 +266,7 @@ else :
     if test.outFile == "" : 
         testLogs = map((lambda x: testConf + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
     else : 
-        testLogs = map((lambda x: test.outFile + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
+        testLogs = map((lambda x: test.outFile + methodNames + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
     logNames = [] 
     if __name__ == "__main__" :
         if command == "verify" or command == "test" : 
@@ -295,15 +284,15 @@ else :
                 simRets = map(parallelSimulation, logNames) 
             for (ret, name) in simRets : 
                  if ret == 0 : 
-                     print "-> Test " +logName + " has a linearizable execution."
+                     print "-> Test " + name + " has a linearizable execution."
                  elif ret > 0 : 
-                     print "-> Test " +logName + " has no linearizable execution."
+                     print "-> Test " + name + " has no linearizable execution."
                  else : 
-                     print "-> Simulation error with " + logName
+                     print "-> Simulation error with " + name
             
 if command == "simulate" : 
     logNames = [testConf + ".temp", test.outFile + ".temp" ]
-    logPrefix = test.outFile + "_%d_%d" % (test.threadNum, test.traceLength)
+    logPrefix = test.outFile + methodNames + "_%d_%d" % (test.threadNum, test.traceLength)
     for logCount in range(repeatLimit) : 
         logNames.append(logPrefix + "_%05d" % (logCount) )
     logNames = filter(lambda x : os.path.isfile (logPath+"/"+x+".jvmlog") and os.path.isfile (logPath+"/"+x+".testlog"), logNames)
