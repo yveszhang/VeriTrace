@@ -169,7 +169,7 @@ def parseTestConfig(filename):
         raise ParseError(-1, "No method for testing") 
     return TestCase(impath, clsname, typeParams, optim, proc, mthds, thdNum, trLeng, outf, False, 1, False) # last three arguments: verbose, repeat, keepsrc
 
-def generateTestJavaSource(test, testPath, classname): 
+def generateTestJavaSource(test, testPath, pkgName, classname): 
     testClassname = "Testing" + classname
     srcFilename = testPath + "/" + testClassname + ".java"
     f = open(srcFilename, "w") 
@@ -191,7 +191,7 @@ def generateTestJavaSource(test, testPath, classname):
     mdNum = len(test.methods)
     
     f.write(firstline + "\n" ) ;
-    # f.write("package test ; \n") 
+    f.write("package " + pkgName + " ; \n") 
     if test.importpath != "" :
         f.write("import " + test.importpath + " ; \n")
     f.write("\n")    
@@ -367,7 +367,7 @@ def generateTestJavaSource(test, testPath, classname):
     f.close() ;
     return "OK"
 
-def generateSimulateScalaSource(test, testPath, classname): 
+def generateSimulateScalaSource(test, testPath, optPath, pkgName, classname): 
     testClassname = "Simulate" + classname 
     srcFilename = testPath + "/" + testClassname + ".scala"
     f = open(srcFilename, "w") 
@@ -387,7 +387,7 @@ def generateSimulateScalaSource(test, testPath, classname):
     mdNum = len(test.methods)
     
     f.write(firstline + "\n" ) ;
-    # f.write("package test ; \n") 
+    f.write("package " + pkgName + " ; \n") 
     if test.importpath != "" :
         f.write("import " + test.importpath.replace('*', '_') + " ; \n")
     f.write("\n")    
@@ -425,7 +425,7 @@ def generateSimulateScalaSource(test, testPath, classname):
         f.write("  type ST = T \n") 
         f.write("  def encodeObject (o: T) = o \n\n")
     else : 
-        fopt = open(testPath+"/"+test.optimisation, "r")
+        fopt = open(optPath, "r")
         for line in fopt : 
             f.write("  " + line) 
         fopt.close()

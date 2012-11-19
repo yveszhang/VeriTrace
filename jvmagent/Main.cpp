@@ -116,6 +116,7 @@ void handleMethodEntry(jvmtiEnv* env, JNIEnv* jni, jthread thread, jmethodID met
   
   map<jmethodID,int>::iterator it = agent->methodKeys[thID].find(method) ;
   if ( it == agent->methodKeys[thID].end() ) { // method not yet recorded 
+    agent->methodKeys[thID][method] = -1 ; // default value is -1, denoting a method not to be recorded
     char* name_ptr ; 
     err = env->GetMethodName(method, &name_ptr, NULL, NULL) ;
     if ( string(name_ptr).compare(0, agent->methodPrefix.size(), agent->methodPrefix) == 0 ) { // method name matches, checking the class
@@ -127,19 +128,17 @@ void handleMethodEntry(jvmtiEnv* env, JNIEnv* jni, jthread thread, jmethodID met
       // string fullClassPath(class_sig) ;
       // int startPos = fullClassPath.rfind('/'), endPos = fullClassPath.rfind(';') ;
       // string classname = fullClassPath.substr(startPos+1, endPos-startPos-1) ;
-      if ( agent->testClass.compare(class_sig) == 0 )   // method class matches, is the interesting method 
+      if ( agent->testClass.compare(class_sig) == 0 ) {  // method class matches, is the interesting method 
 	agent->methodKeys[thID][method] = string_to_int(&name_ptr[agent->methodPrefix.size()]) ;
-      else 
-	agent->methodKeys[thID][method] = -1 ;
+	cout << "TID " << thID << ": " << name_ptr << " -> " << agent->methodKeys[thID][method] << "; " << class_sig << endl ;
+      }
       env->Deallocate( (unsigned char *) class_sig) ;
-    }
-    else {
-      agent->methodKeys[thID][method] = -1 ;
     }
     env->Deallocate( (unsigned char *) name_ptr) ;
   }
   int mdID = agent->methodKeys[thID][method] ;
   if (mdID >= 0) {
+    //    cout << mdID << endl ;
     long ts = getTimeStamp(&init_stamp) ;
     agent->traces[thID].push_back( TraceEvent(ts, mdID, true) ) ;
   }
@@ -236,7 +235,9 @@ void parseOptions(const char* s) throw (AgentException) {
     it++ ;
     agent->traceLength = 2 * string_to_int(*it)  ;
     it++ ;
-    agent->testClass = string("LVT"+*it+"Test;") ;
+    agent->testClass = string("Ltest/"+*it+"/") ;
+    it++ ;
+    agent->testClass = agent->testClass + string("VT"+*it+"Test;") ;
     it++ ;
     int mdNum = string_to_int(*it) ;
     agent->methodNum = mdNum ;

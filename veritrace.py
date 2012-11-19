@@ -89,26 +89,27 @@ def parseCommandLine() :
             printUsage
             exit (-1)
 
-def generateSource(test, testPath, testClassname) :
-    generateTestJavaSource(test, testPath, testClassname)
-    print "Generated testing program in Java: " + testPath + "/" + testProgramName
-    generateSimulateScalaSource(test, testPath, testClassname)
-    print "Generated simulation program in Scala: " + testPath + "/" + simuProgramName
+def generateSource(test, testTargetPath, optPath, pkgName, testClassname) :
+    # print testTargetPath + ": " + testClassname
+    generateTestJavaSource(test, testTargetPath, pkgName, testClassname)
+    print "Generated testing program in Java: " + testTargetPath + "/" + testProgramName
+    generateSimulateScalaSource(test, testTargetPath, optPath, pkgName, testClassname)
+    print "Generated simulation program in Scala: " + testTargetPath + "/" + simuProgramName
     return (0)
 
-def compileTestSource(compiler, srcLanguage, testPath, srcPath, programName) : 
+def compileTestSource(compiler, srcLanguage, testTargetPath, srcPath, programName) : 
     print "Compiling testing program:"
-    print compiler + " -Xlint:unchecked -d . " + testPath + "/" + programName
-    ret = subprocess.call(compiler + " -Xlint:unchecked -d . " + testPath + "/" + programName, shell=True) 
+    print compiler + " -Xlint:unchecked " + testTargetPath + "/" + programName
+    ret = subprocess.call(compiler + " -Xlint:unchecked " + testTargetPath + "/" + programName, shell=True) 
     if ret != 0 :
         return (-1)
     else : 
         return (0)
 
-def compileSimulateSource (compiler, srcLanguage, testPath, srcPath, programName) : 
+def compileSimulateSource (compiler, srcLanguage, testTargetPath, srcPath, programName) : 
     print "Compiling simulation program:"
-    print compiler + " " + testPath + "/" + programName + " " + srcPath + "/Simulation.scala " + srcPath + "/*.java"
-    ret = subprocess.call(compiler + " " + testPath + "/" + programName \
+    print compiler + " " + testTargetPath + "/" + programName + " " + srcPath + "/Simulation.scala " + srcPath + "/*.java"
+    ret = subprocess.call(compiler + " " + testTargetPath + "/" + programName \
                               + " " + srcPath + "/Simulation.scala " + srcPath + "/*.java" \
                               , shell=True \
                           ) 
@@ -117,11 +118,11 @@ def compileSimulateSource (compiler, srcLanguage, testPath, srcPath, programName
     else : 
         return (0)
 
-def runTesting (test, testClassname, logPath, logName, limit) :
+def runTesting (test, targetDir, testPathClass, logPath, logName, limit) :
     agentArgs = "=" + logPath + "/" + logName + "," + repr(test.threadNum) + "," + repr(test.traceLength) + "," \
-        + test.classname + "," + str(len(test.methods)) 
+        + targetDir + "," + test.classname + "," + str(len(test.methods)) 
     testLogFile = logPath + "/" + logName + ".testlog"
-    testCommand = "java -agentpath:" + agentPath + agentArgs + " " + testClassname + " " + testLogFile 
+    testCommand = "java -agentpath:" + agentPath + agentArgs + " " + testPathClass + " " + testLogFile 
     print testCommand    
     count = 0
     ret = 1 
@@ -133,11 +134,11 @@ def runTesting (test, testClassname, logPath, logName, limit) :
     else : 
         return (0) # successful testing run
 
-def runSimulation (test, logPath, logName) :
+def runSimulation (test, simuPathClass, logPath, logName) :
     if test.verbose :
-        verifCommand = "scala Simulate -v " + logPath + "/" + logName
+        verifCommand = "scala " + simuPathClass + " -v " + logPath + "/" + logName
     else : 
-        verifCommand = "scala Simulate " + logPath + "/" + logName 
+        verifCommand = "scala " + simuPathClass + " " + logPath + "/" + logName 
     print (verifCommand) 
     try : 
         ret = subprocess.check_call(verifCommand, shell=True)
@@ -147,16 +148,16 @@ def runSimulation (test, logPath, logName) :
     except : 
         return (-1, logName)
 
-def singleVerify (test, testClassname, logPath, logName, testLimit) :
+def singleVerify (test, testPathClass, simuPathClass, logPath, logName, testLimit) :
     vCount = 0 
     ret = 0
     while ret == 0 and vCount < repeatLimit : 
         print "\nTest try #" + str(vCount+1) + ": "
-        retTest = runTesting(test, "Testing"+testClassname, logPath, logName, testLimit) 
+        retTest = runTesting(test, targetDir, testPathClass, logPath, logName, testLimit) 
         if retTest != 0 : 
             print "Could not generate testing logs!"
             exit (-1) 
-        (ret, _) = runSimulation(test, logPath, logName) 
+        (ret, _) = runSimulation(test, simuPathClass, logPath, logName) 
         if ret == 0 : 
             print "OK!"
         vCount = vCount + 1
@@ -210,29 +211,42 @@ except ParseError as err :
     exit(0)
 
 testClassname = test.classname + "T" + str(test.threadNum) + "L" + str(test.traceLength) 
-methodNames = "" 
+targetDir = test.classname
+optPath = testPath + "/" + test.optimisation
+pkgName = "test." + test.classname
+if test.outFile == "" :
+    logPrefix = test.classname.lower() 
+else : 
+    logPrefix = test.outFile
 mid = 0
 for m in test.methods : 
     testClassname = testClassname + m[0].capitalize()
-    methodNames = methodNames + "_" + m[0]
+    targetDir = targetDir + m[0].capitalize()
+    pkgName = pkgName + m[0].capitalize()
+    logPrefix = logPrefix + "_" + m[0].lower()
+testTargetPath = "test/" + targetDir
 
 testProgramName = "Testing" + testClassname + ".java" 
-simuProgramName = "Simulate" + testClassname + ".scala" 
+simuProgramName = "Simulate" + testClassname + ".scala"
+testClassFull = pkgName + ".Testing" + testClassname 
+simuClassFull = pkgName + ".Simulate"
 
 def parallelTesting(log) :
-    ret = runTesting(test, "Testing"+testClassname, logPath, log, testLimit)
+    ret = runTesting(test, targetDir, testClassFull, logPath, log, testLimit)
     return (log, ret)
 
 def parallelSimulation(log) :
-    ret = runSimulation(test, logPath, log)
+    ret = runSimulation(test, simuClassFull, logPath, log)
     return ret
 
 if (command == "verify") or command == "source" :
-    generateSource(test, testPath, testClassname) 
+    if not os.path.exists(vtHomePath+"/"+testTargetPath) :
+        os.mkdir(vtHomePath+"/"+testTargetPath, 0755)
+    generateSource(test, testTargetPath, optPath, pkgName, testClassname) 
     print "Source files generated!" 
 
 if command == "verify" or command == "test" :
-    ret = compileTestSource(javaCompiler, "java", testPath, srcPath, testProgramName) 
+    ret = compileTestSource(javaCompiler, "java", testTargetPath, srcPath, testProgramName) 
     if ret == 0 : 
         print "Testing file compiled!" 
     else : 
@@ -240,7 +254,7 @@ if command == "verify" or command == "test" :
         exit (-1)
 
 if command == "verify" or command == "simulate" :
-    ret = compileSimulateSource(scalaCompiler, "scala", testPath, srcPath, simuProgramName) 
+    ret = compileSimulateSource(scalaCompiler, "scala", testTargetPath, srcPath, simuProgramName) 
     if ret == 0 :
         print "Simulation file compiled!"
     else : 
@@ -248,14 +262,11 @@ if command == "verify" or command == "simulate" :
         exit (-1)
 
 if test.repeat == 1 :
-    if test.outFile == "" :
-        logName = testConf + ".temp" 
-    else : 
-        logName = test.outFile + methodNames + ".temp" 
+    logName = logPrefix + ".temp" 
     if command == "verify" :
-        singleVerify (test, testClassname, logPath, logName, testLimit) 
+        singleVerify (test, testClassFull, simuClassFull, logPath, logName, testLimit) 
     elif command == "test" : 
-        ret = runTesting(test, "Testing"+testClassname, logPath, logName, testLimit) 
+        ret = runTesting(test, targetDir, testClassFull, logPath, logName, testLimit) 
         if ret != 0 : 
             print "Could not generate testing logs!"
             exit (-1) 
@@ -263,10 +274,7 @@ if test.repeat == 1 :
             print "Testing logs in " + logPath + ": " + logName + ".jvmlog, " + logName + ".testlog" 
             exit (0)
 else :
-    if test.outFile == "" : 
-        testLogs = map((lambda x: testConf + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
-    else : 
-        testLogs = map((lambda x: test.outFile + methodNames + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
+    testLogs = map((lambda x: logPrefix + "_%d_%d_%05d" % (test.threadNum, test.traceLength, x)), range(0, test.repeat))
     logNames = [] 
     if __name__ == "__main__" :
         if command == "verify" or command == "test" : 
@@ -289,10 +297,9 @@ else :
                      print "-> Simulation error with " + name
             
 if command == "simulate" : 
-    logNames = [testConf + ".temp", test.outFile + ".temp" ]
-    logPrefix = test.outFile + methodNames + "_%d_%d" % (test.threadNum, test.traceLength)
+    logNames = [logPrefix + ".temp" ]
     for logCount in range(repeatLimit) : 
-        logNames.append(logPrefix + "_%05d" % (logCount) )
+        logNames.append(logPrefix + "_%d_%d_%05d" % (test.threadNum, test.traceLength, logCount) )
     logNames = filter(lambda x : os.path.isfile (logPath+"/"+x+".jvmlog") and os.path.isfile (logPath+"/"+x+".testlog"), logNames)
     if __name__ == "__main__" :
         if processors > 1 :
